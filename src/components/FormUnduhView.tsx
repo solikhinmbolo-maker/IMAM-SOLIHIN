@@ -10,7 +10,8 @@ import {
   Download, 
   CloudDownload, 
   FileText,
-  User
+  User,
+  ChevronDown
 } from 'lucide-react';
 import { ArsipItem, getStoredArsip } from '../data/mockDatabase';
 
@@ -80,7 +81,6 @@ export default function FormUnduhView({
       setIsDownloading(false);
       setDownloadProgress(0);
 
-      // Trigger browser download simulation or download dataUrl if available
       const element = document.createElement('a');
       const fileContent = item.fileDataUrl || `data:text/plain;charset=utf-8,Dokumen E-Arsip Al-Hicam\nNama: ${item.subjek}\nKategori: ${item.kategori}\nTahun: ${item.tahun}\nID: ${item.id}`;
       element.setAttribute('href', fileContent);
@@ -106,82 +106,88 @@ export default function FormUnduhView({
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins']">
+    <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
       {/* HEADER EMERALD */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b-2 border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 mb-5 border-b-2 border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-inner">
-            <FolderOpen className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-inner flex-shrink-0">
+            <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-emerald-950 flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-emerald-950 flex items-center gap-1.5 flex-wrap">
               <span>Daftar Unduh:</span>
               <span className="text-emerald-600">{kategoriMenu}</span>
             </h3>
-            <p className="text-xs text-slate-500">Akses dan unduh arsip langsung ke perangkat Anda</p>
+            <p className="text-[11px] sm:text-xs text-slate-500">Akses, cetak, dan unduh berkas digital</p>
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold self-start sm:self-auto">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold self-start sm:self-auto">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>Mode Unduh Langsung</span>
         </div>
       </div>
 
       {/* FILTER BERTINGKAT & SMART SEARCH */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-3.5 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-5">
         
         {/* Dropdown Filter Tahun */}
         <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-blue-500" />
-            <span>Filter Tahun:</span>
+          <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+            <Calendar className="w-3 h-3 text-blue-500" />
+            <span>Tahun:</span>
           </label>
-          <select
-            value={filterTahun}
-            onChange={(e) => setFilterTahun(e.target.value)}
-            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 cursor-pointer shadow-sm"
-          >
-            <option value="SEMUA">Semua Tahun</option>
-            {distinctTahun.map(th => (
-              <option key={th} value={th}>Tahun {th}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={filterTahun}
+              onChange={(e) => setFilterTahun(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
+            >
+              <option value="SEMUA">Semua Tahun</option>
+              {distinctTahun.map(th => (
+                <option key={th} value={th}>Tahun {th}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+          </div>
         </div>
 
         {/* Dropdown Filter Jenis Dokumen */}
         <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Jenis Dokumen:</span>
+          <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+            <Filter className="w-3 h-3 text-emerald-500" />
+            <span>Kategori:</span>
           </label>
-          <select
-            value={filterJenis}
-            onChange={(e) => setFilterJenis(e.target.value)}
-            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 cursor-pointer shadow-sm"
-          >
-            <option value="SEMUA">Semua Jenis</option>
-            {distinctJenis.map(jn => (
-              <option key={jn} value={jn}>{jn}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={filterJenis}
+              onChange={(e) => setFilterJenis(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
+            >
+              <option value="SEMUA">Semua Kategori</option>
+              {distinctJenis.map(jn => (
+                <option key={jn} value={jn}>{jn}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+          </div>
         </div>
 
         {/* Smart Search */}
-        <div className="md:col-span-2">
-          <label className="block text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1.5">
-            <Search className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Cari Cepat (Nama / NISN / Subjek):</span>
+        <div className="sm:col-span-2">
+          <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+            <Search className="w-3 h-3 text-indigo-500" />
+            <span>Cari Cepat (Nama / NISN / Berkas):</span>
           </label>
           <div className="relative">
-            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Ketik nama siswa, NISN, atau judul berkas..."
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"
+              placeholder="Ketik nama siswa atau judul berkas..."
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"
             />
           </div>
         </div>
@@ -189,13 +195,13 @@ export default function FormUnduhView({
 
       {/* Progress Bar Animasi Unduh */}
       {isDownloading && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-6 animate-fadeIn space-y-2">
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl mb-5 animate-fadeIn space-y-1.5">
           <div className="flex justify-between items-center text-xs font-semibold text-emerald-900">
-            <span className="flex items-center gap-2">
-              <CloudDownload className="w-4 h-4 text-emerald-600 animate-bounce" />
-              <span>Mengunduh berkas: <strong>{downloadingItemName}</strong></span>
+            <span className="flex items-center gap-1.5 truncate">
+              <CloudDownload className="w-4 h-4 text-emerald-600 animate-bounce flex-shrink-0" />
+              <span className="truncate">Mengunduh: <strong>{downloadingItemName}</strong></span>
             </span>
-            <span className="text-emerald-700 font-bold">{downloadProgress}%</span>
+            <span className="text-emerald-700 font-bold ml-2">{downloadProgress}%</span>
           </div>
           <div className="w-full h-2 bg-emerald-200 rounded-full overflow-hidden">
             <div 
@@ -206,8 +212,65 @@ export default function FormUnduhView({
         </div>
       )}
 
-      {/* Tabel Data Arsip */}
-      <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
+      {/* MOBILE-FIRST CARD LIST (TAMPILAN KHUSUS HP YANG SANGAT RAPI) */}
+      <div className="block sm:hidden space-y-3">
+        {filteredData.length === 0 ? (
+          <div className="py-10 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+            <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+            <p className="font-bold text-xs text-slate-700">Berkas tidak ditemukan</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Ubah filter atau kata kunci pencarian</p>
+          </div>
+        ) : (
+          filteredData.map((item) => (
+            <div key={item.id} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 shadow-sm space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  {item.kategori}
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">{item.tanggal}</span>
+              </div>
+
+              <div>
+                <strong className="text-xs font-bold text-slate-900 block">{item.subjek}</strong>
+                <p className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
+                  ID: {item.identitas || '-'} • Th: {item.tahun}
+                </p>
+              </div>
+
+              {/* Action Buttons on Mobile Card */}
+              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => onPreview(item)}
+                  className="py-1.5 px-2 bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Preview</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrint(item)}
+                  className="py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload(item)}
+                  className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh</span>
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* DESKTOP TABLE VIEW (TETAP SAMA SEPERTI ASLINYA) */}
+      <div className="hidden sm:block overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
         <table className="w-full text-left text-xs sm:text-sm border-collapse">
           <thead>
             <tr className="bg-slate-100/80 text-slate-700 border-b border-slate-200 font-bold">
@@ -253,7 +316,6 @@ export default function FormUnduhView({
                   </td>
                   <td className="py-3.5 px-4 text-center whitespace-nowrap">
                     <div className="inline-flex items-center gap-1.5">
-                      {/* Preview Button */}
                       <button
                         type="button"
                         onClick={() => onPreview(item)}
@@ -263,7 +325,6 @@ export default function FormUnduhView({
                         <Eye className="w-4 h-4" />
                       </button>
 
-                      {/* Cetak Button */}
                       <button
                         type="button"
                         onClick={() => handlePrint(item)}
@@ -274,7 +335,6 @@ export default function FormUnduhView({
                         <span>Cetak</span>
                       </button>
 
-                      {/* Unduh Button */}
                       <button
                         type="button"
                         onClick={() => handleDownload(item)}

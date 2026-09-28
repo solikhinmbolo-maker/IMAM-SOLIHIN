@@ -4,12 +4,13 @@ import {
   Search, 
   Check, 
   X, 
-  Filter, 
   GraduationCap, 
   Briefcase, 
   Eye,
   FileCheck,
-  AlertTriangle
+  ChevronRight,
+  Table as TableIcon,
+  LayoutGrid
 } from 'lucide-react';
 import { 
   MasterSiswaItem, 
@@ -29,6 +30,7 @@ interface RekapArsipViewProps {
 export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
   const [targetKelompok, setTargetKelompok] = useState<'Siswa' | 'Guru'>('Siswa');
   const [searchName, setSearchName] = useState('');
+  const [mobileViewMode, setMobileViewMode] = useState<'cards' | 'table'>('cards');
 
   const masterSiswa = getStoredMasterSiswa();
   const masterGuru = getStoredMasterGuru();
@@ -37,7 +39,6 @@ export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
   // Matriks Siswa
   const siswaMatrix = useMemo(() => {
     return masterSiswa.map((siswa, idx) => {
-      // Find all archives for this student
       const userArchives = allArsip.filter(
         a => a.kategoriUtama === 'Arsip Siswa' && 
         (a.subjek.toLowerCase().includes(siswa.nama.toLowerCase()) || a.identitas === siswa.nisn)
@@ -117,40 +118,42 @@ export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
     return guruMatrix.filter(g => g.nama.toLowerCase().includes(q) || g.nuptk.includes(q));
   }, [guruMatrix, searchName]);
 
+  const currentCategories = targetKelompok === 'Siswa' ? KATEGORI_SISWA : KATEGORI_GURU;
+
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins']">
+    <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 mb-5 border-b border-slate-100">
         <div>
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
             <CheckSquare className="w-5 h-5 text-blue-600" />
             <span>Matriks Rekap Kelengkapan Berkas</span>
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Pantau status kelengkapan dokumen yang sudah dan belum diunggah secara menyeluruh
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+            Pantau status dokumen yang sudah diunggah atau belum lengkap
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
             <span>✅ Lengkap</span>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
-            <span>❌ Belum Ada</span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-800 border border-red-200 text-xs font-semibold">
+            <span>❌ Belum</span>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-5">
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">Target Kelompok:</label>
-          <div className="flex rounded-xl bg-white border border-slate-300 p-1 shadow-sm">
+          <label className="block text-[11px] font-bold text-slate-700 mb-1">Target Kelompok:</label>
+          <div className="flex rounded-2xl bg-white border border-slate-300 p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setTargetKelompok('Siswa')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 targetKelompok === 'Siswa' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -160,7 +163,7 @@ export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
             <button
               type="button"
               onClick={() => setTargetKelompok('Guru')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 targetKelompok === 'Guru' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -171,185 +174,181 @@ export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Cari Nama {targetKelompok}:
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] font-bold text-slate-700">
+              Cari Nama {targetKelompok}:
+            </label>
+            {/* Toggle Card vs Table in Mobile */}
+            <div className="flex sm:hidden items-center gap-1 bg-slate-200 p-0.5 rounded-lg text-[10px]">
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('cards')}
+                className={`px-2 py-0.5 rounded ${mobileViewMode === 'cards' ? 'bg-white font-bold text-blue-600 shadow-xs' : 'text-slate-600'}`}
+              >
+                Kartu
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('table')}
+                className={`px-2 py-0.5 rounded ${mobileViewMode === 'table' ? 'bg-white font-bold text-blue-600 shadow-xs' : 'text-slate-600'}`}
+              >
+                Tabel
+              </button>
+            </div>
+          </div>
           <div className="relative">
-            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
-              placeholder={`Ketik nama ${targetKelompok.toLowerCase()} untuk menyaring matriks...`}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"
+              placeholder={`Ketik nama ${targetKelompok.toLowerCase()} untuk menyaring...`}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"
             />
           </div>
         </div>
       </div>
 
-      {/* MATRIX TABLE: SISWA */}
-      {targetKelompok === 'Siswa' ? (
-        <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
-          <table className="w-full text-left text-xs border-collapse min-w-[950px]">
-            <thead>
-              <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
-                <th className="py-3 px-3 w-10 text-center">NO</th>
-                <th className="py-3 px-4 min-w-[180px]">NAMA SISWA</th>
-                <th className="py-3 px-3 text-center">TH. LULUS</th>
-                <th className="py-3 px-3 text-center">STATUS</th>
-                {KATEGORI_SISWA.map(kat => (
-                  <th key={kat} className="py-3 px-2 text-center font-bold tracking-tight text-[11px] max-w-[90px] whitespace-normal">
-                    {kat.toUpperCase()}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredSiswa.length === 0 ? (
-                <tr>
-                  <td colSpan={14} className="py-8 text-center text-slate-400 font-medium">
-                    Data siswa tidak ditemukan dengan kata kunci "{searchName}".
-                  </td>
-                </tr>
-              ) : (
-                filteredSiswa.map((row, idx) => {
-                  const percent = Math.round((row.completedCount / row.total) * 100);
-                  const isAllComplete = row.completedCount === row.total;
+      {/* MOBILE-FIRST COMPACT CARDS VIEW (UNTUK LAYAR HP) */}
+      <div className={`sm:hidden space-y-3 ${mobileViewMode === 'cards' ? 'block' : 'hidden'}`}>
+        {(targetKelompok === 'Siswa' ? filteredSiswa : filteredGuru).map((row: any) => {
+          const percent = Math.round((row.completedCount / row.total) * 100);
+          const isAll = row.completedCount === row.total;
+
+          return (
+            <div key={row.nisn || row.nuptk} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <strong className="text-xs font-bold text-slate-900 block leading-tight">{row.nama}</strong>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {targetKelompok === 'Siswa' ? `NISN: ${row.nisn} • ${row.kelas} (${row.tahun})` : `NUPTK: ${row.nuptk} • ${row.jabatan}`}
+                  </span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  isAll ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {row.completedCount}/{row.total} ({percent}%)
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${isAll ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+
+              {/* Document check tags */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {currentCategories.map(kat => {
+                  const hasDoc = row.statusMap[kat];
+                  const matchedDoc = row.userArchives.find((a: any) => {
+                    const aKat = a.kategori.toLowerCase();
+                    const target = kat.toLowerCase();
+                    return aKat.includes(target) || target.includes(aKat);
+                  });
 
                   return (
-                    <tr key={row.nisn} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 text-center text-slate-500 font-medium">{idx + 1}</td>
-                      <td className="py-3 px-4">
-                        <strong className="text-slate-900 block font-semibold">{row.nama}</strong>
-                        <span className="text-[10px] text-slate-400 font-mono">NISN: {row.nisn} • {row.kelas}</span>
-                      </td>
-                      <td className="py-3 px-3 text-center text-slate-700 font-semibold">{row.tahun}</td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isAllComplete ? 'bg-emerald-100 text-emerald-800' :
-                          row.completedCount > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {row.completedCount}/{row.total} ({percent}%)
-                        </span>
-                      </td>
-                      {KATEGORI_SISWA.map(kat => {
-                        const hasDoc = row.statusMap[kat];
-                        const matchedDoc = row.userArchives.find(a => {
-                          const aKat = a.kategori.toLowerCase();
-                          const target = kat.toLowerCase();
-                          return aKat.includes(target) || target.includes(aKat);
-                        });
-
-                        return (
-                          <td key={kat} className="py-3 px-2 text-center">
-                            {hasDoc ? (
-                              <button
-                                type="button"
-                                onClick={() => matchedDoc && onPreview(matchedDoc)}
-                                title={`Sudah Diunggah: Klik untuk Preview`}
-                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors font-bold cursor-pointer"
-                              >
-                                ✅
-                              </button>
-                            ) : (
-                              <span 
-                                title="Belum Diunggah" 
-                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-50 text-red-600 font-bold"
-                              >
-                                ❌
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                    <button
+                      key={kat}
+                      type="button"
+                      disabled={!hasDoc}
+                      onClick={() => matchedDoc && onPreview(matchedDoc)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-medium flex items-center gap-1 transition-all ${
+                        hasDoc 
+                          ? 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 cursor-pointer active:scale-95' 
+                          : 'bg-white text-slate-400 border border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <span>{hasDoc ? '✅' : '❌'}</span>
+                      <span className="truncate max-w-[120px]">{kat}</span>
+                    </button>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        /* MATRIX TABLE: GURU */
-        <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
-          <table className="w-full text-left text-xs border-collapse min-w-[1300px]">
-            <thead>
-              <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
-                <th className="py-3 px-3 w-10 text-center">NO</th>
-                <th className="py-3 px-4 min-w-[200px]">NAMA GURU / PEGAWAI</th>
-                <th className="py-3 px-3 text-center">STATUS</th>
-                {KATEGORI_GURU.map(kat => (
-                  <th key={kat} className="py-3 px-2 text-center font-bold tracking-tight text-[10px] max-w-[85px] whitespace-normal">
-                    {kat.toUpperCase()}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredGuru.length === 0 ? (
-                <tr>
-                  <td colSpan={17} className="py-8 text-center text-slate-400 font-medium">
-                    Data guru tidak ditemukan dengan kata kunci "{searchName}".
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* DESKTOP MATRIX TABLE (ATAU KETIKA USER MEMILIH MODE TABEL DI HP) */}
+      <div className={`${mobileViewMode === 'cards' ? 'hidden sm:block' : 'block'} overflow-x-auto border border-slate-200 rounded-2xl shadow-sm`}>
+        <table className="w-full text-left text-xs border-collapse min-w-[950px]">
+          <thead>
+            <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+              <th className="py-3 px-3 w-10 text-center">NO</th>
+              <th className="py-3 px-4 min-w-[180px]">NAMA {targetKelompok.toUpperCase()}</th>
+              {targetKelompok === 'Siswa' && <th className="py-3 px-3 text-center">TH. LULUS</th>}
+              <th className="py-3 px-3 text-center">STATUS</th>
+              {currentCategories.map(kat => (
+                <th key={kat} className="py-3 px-2 text-center font-bold tracking-tight text-[11px] max-w-[90px] whitespace-normal">
+                  {kat.toUpperCase()}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {(targetKelompok === 'Siswa' ? filteredSiswa : filteredGuru).map((row: any, idx) => {
+              const percent = Math.round((row.completedCount / row.total) * 100);
+              const isAllComplete = row.completedCount === row.total;
+
+              return (
+                <tr key={row.nisn || row.nuptk} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 px-3 text-center text-slate-500 font-medium">{idx + 1}</td>
+                  <td className="py-3 px-4">
+                    <strong className="text-slate-900 block font-semibold">{row.nama}</strong>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {targetKelompok === 'Siswa' ? `NISN: ${row.nisn} • ${row.kelas}` : `NUPTK: ${row.nuptk} • ${row.jabatan}`}
+                    </span>
                   </td>
+                  {targetKelompok === 'Siswa' && (
+                    <td className="py-3 px-3 text-center text-slate-700 font-semibold">{row.tahun}</td>
+                  )}
+                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      isAllComplete ? 'bg-emerald-100 text-emerald-800' :
+                      row.completedCount > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {row.completedCount}/{row.total} ({percent}%)
+                    </span>
+                  </td>
+                  {currentCategories.map(kat => {
+                    const hasDoc = row.statusMap[kat];
+                    const matchedDoc = row.userArchives.find((a: any) => {
+                      const aKat = a.kategori.toLowerCase();
+                      const target = kat.toLowerCase();
+                      return aKat.includes(target) || target.includes(aKat);
+                    });
+
+                    return (
+                      <td key={kat} className="py-3 px-2 text-center">
+                        {hasDoc ? (
+                          <button
+                            type="button"
+                            onClick={() => matchedDoc && onPreview(matchedDoc)}
+                            title="Sudah Diunggah: Klik untuk Preview"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors font-bold cursor-pointer"
+                          >
+                            ✅
+                          </button>
+                        ) : (
+                          <span 
+                            title="Belum Diunggah" 
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-50 text-red-600 font-bold"
+                          >
+                            ❌
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
-              ) : (
-                filteredGuru.map((row, idx) => {
-                  const percent = Math.round((row.completedCount / row.total) * 100);
-                  const isAllComplete = row.completedCount === row.total;
-
-                  return (
-                    <tr key={row.nuptk} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 text-center text-slate-500 font-medium">{idx + 1}</td>
-                      <td className="py-3 px-4">
-                        <strong className="text-slate-900 block font-semibold">{row.nama}</strong>
-                        <span className="text-[10px] text-slate-400 font-mono">NUPTK: {row.nuptk} • {row.jabatan}</span>
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isAllComplete ? 'bg-emerald-100 text-emerald-800' :
-                          row.completedCount > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {row.completedCount}/{row.total} ({percent}%)
-                        </span>
-                      </td>
-                      {KATEGORI_GURU.map(kat => {
-                        const hasDoc = row.statusMap[kat];
-                        const matchedDoc = row.userArchives.find(a => {
-                          const aKat = a.kategori.toLowerCase();
-                          const target = kat.toLowerCase();
-                          return aKat.includes(target) || target.includes(aKat);
-                        });
-
-                        return (
-                          <td key={kat} className="py-3 px-2 text-center">
-                            {hasDoc ? (
-                              <button
-                                type="button"
-                                onClick={() => matchedDoc && onPreview(matchedDoc)}
-                                title={`Sudah Diunggah: Klik untuk Preview`}
-                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors font-bold cursor-pointer"
-                              >
-                                ✅
-                              </button>
-                            ) : (
-                              <span 
-                                title="Belum Diunggah" 
-                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-50 text-red-600 font-bold"
-                              >
-                                ❌
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
     </div>
   );

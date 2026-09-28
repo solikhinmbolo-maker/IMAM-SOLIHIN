@@ -5,12 +5,17 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Layers, 
-  UserPlus, 
   Trash2, 
   RefreshCw, 
   Check, 
-  Sparkles,
-  ArrowRight
+  Calendar,
+  User,
+  Hash,
+  FileCheck,
+  Paperclip,
+  Upload,
+  ArrowRight,
+  ChevronDown
 } from 'lucide-react';
 import { 
   MasterSiswaItem, 
@@ -105,7 +110,7 @@ export default function FormUploadView({
 
   // Default initial kategori
   useEffect(() => {
-    if (activeKategoriList.length > 0 && !kategori) {
+    if (activeKategoriList.length > 0) {
       setKategori(activeKategoriList[0]);
     }
   }, [jenisArsip]);
@@ -120,6 +125,11 @@ export default function FormUploadView({
       }
       setSelectedFile(file);
       setErrorMessage('');
+
+      // Auto-fill namaDokumen if empty
+      if (!namaDokumen && namaSubjek) {
+        setNamaDokumen(`${kategori} - ${namaSubjek} (${tahun})`);
+      }
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -169,13 +179,13 @@ export default function FormUploadView({
     setErrorMessage('');
 
     if (!namaSubjek.trim()) {
-      setErrorMessage('Mohon lengkapi nama siswa/guru/instansi.');
+      setErrorMessage('Mohon pilih nama siswa/guru atau instansi terlebih dahulu.');
       return;
     }
 
     if (modeUpload === 'individual') {
       if (!selectedFile) {
-        setErrorMessage('Mohon pilih file berkas terlebih dahulu.');
+        setErrorMessage('Mohon pilih file berkas dokumen terlebih dahulu.');
         return;
       }
 
@@ -238,7 +248,7 @@ export default function FormUploadView({
       // Mode Kolektif
       const count = Object.keys(kolektifFiles).length;
       if (count === 0) {
-        setErrorMessage('Pilih minimal 1 berkas pada tabel kategori untuk upload kolektif.');
+        setErrorMessage('Pilih minimal 1 berkas pada daftar kategori untuk upload kolektif.');
         return;
       }
 
@@ -262,7 +272,6 @@ export default function FormUploadView({
             setProgressPercent(100);
             setProgressStatus('Semua berkas kolektif berhasil disimpan!');
 
-            // Save all items
             const todayStr = new Date().toLocaleDateString('id-ID');
             const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
 
@@ -299,31 +308,28 @@ export default function FormUploadView({
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins']">
+    <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/90 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shadow-inner">
-            <CloudUpload className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Formulir Pengarsipan Dokumen</h3>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-slate-500 font-medium">Kategori Aktif:</span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-200">
-                {jenisArsip}
-              </span>
+      {/* HEADER SECTION */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 mb-5 border-b border-slate-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <CloudUpload className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Unggah Berkas Baru</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500">Pilih subjek dan lampirkan dokumen digital</p>
             </div>
           </div>
         </div>
 
-        {/* Switcher Mode: Individual vs Kolektif */}
-        <div className="flex items-center bg-slate-100 p-1.5 rounded-xl gap-1 self-start sm:self-auto">
+        {/* Native Segmented Control: Individual vs Kolektif */}
+        <div className="w-full sm:w-auto flex items-center bg-slate-100 p-1 rounded-2xl">
           <button
             type="button"
             onClick={() => setModeUpload('individual')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               modeUpload === 'individual'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -335,7 +341,7 @@ export default function FormUploadView({
           <button
             type="button"
             onClick={() => setModeUpload('kolektif')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               modeUpload === 'kolektif'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -347,63 +353,72 @@ export default function FormUploadView({
         </div>
       </div>
 
-      {/* Target Category Pills */}
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-        <span className="text-xs font-semibold text-slate-500 mr-2">Target Berkas:</span>
-        {(['Arsip Siswa', 'Arsip Guru', 'Arsip Lainnya'] as const).map(j => (
-          <button
-            key={j}
-            type="button"
-            onClick={() => {
-              setJenisArsip(j);
-              setNamaSubjek('');
-              setIdentitas('');
-            }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-              jenisArsip === j
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            {j}
-          </button>
-        ))}
+      {/* Target Category Swipeable Pills */}
+      <div className="mb-5">
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Pilih Kelompok Berkas:</span>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {(['Arsip Siswa', 'Arsip Guru', 'Arsip Lainnya'] as const).map(j => (
+            <button
+              key={j}
+              type="button"
+              onClick={() => {
+                setJenisArsip(j);
+                setNamaSubjek('');
+                setIdentitas('');
+              }}
+              className={`px-4 py-2 rounded-2xl text-xs font-semibold border transition-all flex-shrink-0 cursor-pointer ${
+                jenisArsip === j
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {j === 'Arsip Siswa' ? '🎓 ' : j === 'Arsip Guru' ? '👨‍🏫 ' : '📁 '}
+              {j}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-center gap-2">
+        <div className="mb-5 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
 
       {/* Main Upload Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         
         {/* Row 1: Tahun & NISN/NIP */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              {jenisArsip === 'Arsip Siswa' ? 'Tahun Lulus / Angkatan' : 
-               jenisArsip === 'Arsip Guru' ? 'Tahun Penerbitan SK' : 'Tahun Dokumen'}
-              <span className="text-red-500 ml-1">*</span>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+              <span>
+                {jenisArsip === 'Arsip Siswa' ? 'Tahun Lulus / Angkatan' : 
+                 jenisArsip === 'Arsip Guru' ? 'Tahun Penerbitan SK' : 'Tahun Dokumen'}
+              </span>
+              <span className="text-red-500">*</span>
             </label>
             {jenisArsip === 'Arsip Siswa' ? (
-              <select
-                value={tahun}
-                onChange={(e) => {
-                  setTahun(e.target.value);
-                  setNamaSubjek('');
-                }}
-                required
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
-              >
-                <option value="" disabled>-- Pilih Tahun Angkatan --</option>
-                {tahunList.map(t => (
-                  <option key={t} value={t}>Angkatan {t}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={tahun}
+                  onChange={(e) => {
+                    setTahun(e.target.value);
+                    setNamaSubjek('');
+                  }}
+                  required
+                  className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+                >
+                  <option value="" disabled>-- Pilih Tahun Angkatan --</option>
+                  {tahunList.map(t => (
+                    <option key={t} value={t}>Angkatan {t}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
+              </div>
             ) : (
               <input
                 type="number"
@@ -411,28 +426,31 @@ export default function FormUploadView({
                 onChange={(e) => setTahun(e.target.value)}
                 placeholder="Contoh: 2026"
                 required
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 focus:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 transition-all"
               />
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              {jenisArsip === 'Arsip Siswa' ? 'NISN / NIS' : 
-               jenisArsip === 'Arsip Guru' ? 'NIP / NUPTK' : 'Nomor Surat / Kode'}
-              <span className="text-red-500 ml-1">*</span>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Hash className="w-3.5 h-3.5 text-indigo-500" />
+              <span>
+                {jenisArsip === 'Arsip Siswa' ? 'NISN / NIS' : 
+                 jenisArsip === 'Arsip Guru' ? 'NIP / NUPTK' : 'Nomor Surat / Kode'}
+              </span>
+              <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={identitas}
               onChange={(e) => setIdentitas(e.target.value)}
               readOnly={jenisArsip !== 'Arsip Lainnya'}
-              placeholder={jenisArsip === 'Arsip Lainnya' ? 'Masukkan nomor surat / kode berkas' : 'Pilih Nama untuk memunculkan otomatis'}
+              placeholder={jenisArsip === 'Arsip Lainnya' ? 'Masukkan nomor surat atau kode' : 'Otomatis muncul setelah memilih nama'}
               required
-              className={`w-full px-4 py-3 rounded-xl text-sm border transition-all ${
+              className={`w-full px-3.5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm border transition-all font-mono ${
                 jenisArsip === 'Arsip Lainnya'
-                  ? 'bg-white border-slate-300 text-slate-800 focus:outline-none focus:border-blue-500'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 font-mono'
+                  ? 'bg-slate-50 focus:bg-white border-slate-300 text-slate-900 focus:outline-none focus:border-blue-500'
+                  : 'bg-slate-100/90 border-slate-200 text-slate-700'
               }`}
             />
           </div>
@@ -440,35 +458,44 @@ export default function FormUploadView({
 
         {/* Row 2: Nama Subjek / Siswa / Guru */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-2">
-            {jenisArsip === 'Arsip Siswa' ? 'Nama Siswa / Alumni' : 
-             jenisArsip === 'Arsip Guru' ? 'Nama Guru / Pegawai' : 'Nama Instansi / Perihal Surat'}
-            <span className="text-red-500 ml-1">*</span>
+          <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-blue-500" />
+            <span>
+              {jenisArsip === 'Arsip Siswa' ? 'Nama Siswa / Alumni' : 
+               jenisArsip === 'Arsip Guru' ? 'Nama Guru / Pegawai' : 'Nama Instansi / Perihal Surat'}
+            </span>
+            <span className="text-red-500">*</span>
           </label>
           {jenisArsip === 'Arsip Siswa' ? (
-            <select
-              value={namaSubjek}
-              onChange={(e) => setNamaSubjek(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
-            >
-              <option value="" disabled>-- Pilih Nama Siswa --</option>
-              {siswaFilter.map(s => (
-                <option key={s.id} value={s.nama}>{s.nama} ({s.kelas})</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={namaSubjek}
+                onChange={(e) => setNamaSubjek(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+              >
+                <option value="" disabled>-- Pilih Nama Siswa --</option>
+                {siswaFilter.map(s => (
+                  <option key={s.id} value={s.nama}>{s.nama} ({s.kelas})</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
+            </div>
           ) : jenisArsip === 'Arsip Guru' ? (
-            <select
-              value={namaSubjek}
-              onChange={(e) => setNamaSubjek(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
-            >
-              <option value="" disabled>-- Pilih Nama Guru --</option>
-              {masterGuru.map(g => (
-                <option key={g.id} value={g.nama}>{g.nama} - {g.jabatan}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={namaSubjek}
+                onChange={(e) => setNamaSubjek(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+              >
+                <option value="" disabled>-- Pilih Nama Guru --</option>
+                {masterGuru.map(g => (
+                  <option key={g.id} value={g.nama}>{g.nama} - {g.jabatan}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
+            </div>
           ) : (
             <input
               type="text"
@@ -476,17 +503,39 @@ export default function FormUploadView({
               onChange={(e) => setNamaSubjek(e.target.value)}
               placeholder="Contoh: Dinas Pendidikan Kab. Jombang"
               required
-              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+              className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 focus:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 transition-all"
             />
           )}
         </div>
 
         {/* MODE INDIVIDUAL */}
         {modeUpload === 'individual' ? (
-          <div className="space-y-5 pt-2">
+          <div className="space-y-4 pt-1">
+            {/* Kategori Arsip Dropdown */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Nama / Judul Dokumen <span className="text-red-500">*</span>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                <span>Kategori Arsip <span className="text-red-500">*</span></span>
+                <span className="text-[10px] text-blue-600 font-normal">{activeKategoriList.length} kategori tersedia</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={kategori}
+                  onChange={(e) => setKategori(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+                >
+                  {activeKategoriList.map(kat => (
+                    <option key={kat} value={kat}>{kat}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Nama / Judul Dokumen */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Judul / Nama Dokumen <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -494,174 +543,191 @@ export default function FormUploadView({
                 onChange={(e) => setNamaDokumen(e.target.value)}
                 placeholder="Contoh: Ijazah SMP Andika Pratama - Kelulusan 2024"
                 required
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 focus:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-blue-500 transition-all"
               />
             </div>
 
+            {/* Native Mobile Attachment Picker */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Kategori Arsip <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={kategori}
-                onChange={(e) => setKategori(e.target.value)}
-                required
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
-              >
-                {activeKategoriList.map(kat => (
-                  <option key={kat} value={kat}>{kat}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Dropzone */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Pilih Berkas Dokumen <span className="text-red-500">*</span>
               </label>
-              <label className="group flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/50 rounded-2xl cursor-pointer transition-all">
-                <input 
-                  type="file" 
-                  onChange={handleFileChange} 
-                  className="hidden" 
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                />
-                <CloudUpload className="w-10 h-10 text-slate-400 group-hover:text-blue-500 mb-3 transition-colors" />
-                <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600">
-                  {selectedFile ? selectedFile.name : 'Klik untuk cari atau jatuhkan file di sini'}
-                </span>
-                <span className="text-xs text-slate-400 mt-1">
-                  Format bebas (PDF, Gambar, Word) Maksimal 10MB
-                </span>
-                {selectedFile && (
-                  <span className="mt-2 text-xs font-bold text-emerald-600 flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" /> Berkas terpilih ({(selectedFile.size / 1024).toFixed(0)} KB)
+              
+              {!selectedFile ? (
+                <label className="group flex flex-col items-center justify-center p-6 sm:p-8 border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50/70 rounded-3xl cursor-pointer transition-all text-center">
+                  <input 
+                    type="file" 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <div className="w-12 h-12 rounded-2xl bg-white text-blue-600 flex items-center justify-center shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                    <CloudUpload className="w-6 h-6" />
+                  </div>
+                  <strong className="text-xs sm:text-sm text-slate-800 font-bold block">
+                    Sentuh untuk Pilih File Dokumen
+                  </strong>
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Format: PDF, Foto Scan (JPG/PNG), Word (Maks. 10MB)
                   </span>
-                )}
-              </label>
+                </label>
+              ) : (
+                <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                      <FileCheck className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <strong className="text-xs sm:text-sm font-bold text-slate-900 block truncate">{selectedFile.name}</strong>
+                      <span className="text-[10px] text-emerald-700 font-semibold block">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Berkas Terlampir
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <label className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-colors">
+                      <span>Ganti</span>
+                      <input 
+                        type="file" 
+                        onChange={handleFileChange} 
+                        className="hidden" 
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setFileBase64('');
+                      }}
+                      className="p-1.5 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors"
+                      title="Hapus"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
-          /* MODE KOLEKTIF */
-          <div className="space-y-4 pt-2">
+          /* MODE KOLEKTIF - ADAPTED BEAUTIFULLY FOR MOBILE */
+          <div className="space-y-3 pt-1">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-blue-600" />
-                <span>DAFTAR KATEGORI BERKAS SUBJEK</span>
+                <span>DAFTAR KATEGORI KOLEKTIF</span>
               </label>
-              <span className="text-xs text-slate-500 font-medium">
-                Terlampir: <strong>{Object.keys(kolektifFiles).length}</strong> dari {activeKategoriList.length} kategori
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">
+                {Object.keys(kolektifFiles).length}/{activeKategoriList.length} Terpilih
               </span>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-700">
-                    <th className="py-3 px-4 font-bold w-1/3">Kategori Dokumen</th>
-                    <th className="py-3 px-4 font-bold w-5/12">Status / Nama Berkas</th>
-                    <th className="py-3 px-4 font-bold text-right w-1/4">Aksi Berkas</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {activeKategoriList.map(kat => {
-                    const isAttached = !!kolektifFiles[kat];
-                    return (
-                      <tr key={kat} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-4 font-semibold text-slate-800">
-                          📄 {kat}
-                        </td>
-                        <td className="py-3 px-4">
-                          {isAttached ? (
-                            <span className="text-emerald-600 font-medium flex items-center gap-1.5 truncate max-w-xs">
-                              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{kolektifFiles[kat].file.name}</span>
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-slate-300" />
-                              Belum terlampir
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="inline-flex items-center gap-2 justify-end">
-                            {isAttached ? (
-                              <>
-                                <label className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1">
-                                  <RefreshCw className="w-3 h-3" /> Ganti
-                                  <input
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => e.target.files && handleKolektifFile(kat, e.target.files[0])}
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() => removeKolektifFile(kat)}
-                                  className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors cursor-pointer"
-                                  title="Hapus Berkas"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            ) : (
-                              <label className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1">
-                                <CloudUpload className="w-3 h-3" /> Pilih File
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  onChange={(e) => e.target.files && handleKolektifFile(kat, e.target.files[0])}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Mobile Cards List instead of cramped table */}
+            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              {activeKategoriList.map((kat, idx) => {
+                const isAttached = !!kolektifFiles[kat];
+                return (
+                  <div 
+                    key={kat} 
+                    className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      isAttached ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200/90'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 block truncate">{kat}</span>
+                        {isAttached && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                            Siap
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                        {isAttached ? (
+                          <span className="text-emerald-700 font-medium">{kolektifFiles[kat].file.name}</span>
+                        ) : (
+                          'Belum ada file dipilih'
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex-shrink-0">
+                      {isAttached ? (
+                        <div className="flex items-center gap-1">
+                          <label className="p-2 bg-amber-100 text-amber-800 rounded-xl text-xs font-semibold cursor-pointer">
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => e.target.files && handleKolektifFile(kat, e.target.files[0])}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeKolektifFile(kat)}
+                            className="p-2 bg-red-100 text-red-600 rounded-xl"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-sm flex items-center gap-1">
+                          <Upload className="w-3 h-3" />
+                          <span>Pilih</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => e.target.files && handleKolektifFile(kat, e.target.files[0])}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Upload Progress Bar */}
         {isUploading && (
-          <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-fadeIn space-y-2">
-            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl animate-fadeIn space-y-2">
+            <div className="flex justify-between items-center text-xs font-semibold text-blue-950">
               <span className="flex items-center gap-2">
                 <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                {progressStatus}
+                <span className="truncate">{progressStatus}</span>
               </span>
-              <span className="text-blue-600 font-bold">{progressPercent}%</span>
+              <span className="text-blue-700 font-bold">{progressPercent}%</span>
             </div>
-            <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-blue-200 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300 rounded-full"
+                className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-300 rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
         )}
 
-        {/* Buttons Action */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+        {/* Buttons Action (Mobile-First CTA) */}
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+          <button
+            type="submit"
+            disabled={isUploading}
+            className="w-full sm:w-auto order-1 sm:order-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-blue-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <CloudUpload className="w-4 h-4" />
+            <span>{isUploading ? 'Memproses Berkas...' : 'Unggah Dokumen Sekarang'}</span>
+          </button>
+          
           <button
             type="button"
             onClick={onCancel}
             disabled={isUploading}
-            className="px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto order-2 sm:order-1 px-5 py-3 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer text-center"
           >
             Batal
-          </button>
-          <button
-            type="submit"
-            disabled={isUploading}
-            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <CloudUpload className="w-4 h-4" />
-            <span>{isUploading ? 'Memproses...' : 'Mulai Unggah Arsip'}</span>
           </button>
         </div>
       </form>
@@ -669,13 +735,13 @@ export default function FormUploadView({
       {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp border border-slate-100">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp border border-slate-100">
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 shadow-[0_0_25px_rgba(16,185,129,0.3)]">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Pengarsipan Berhasil!</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-1.5">Pengarsipan Berhasil!</h3>
             <p className="text-xs text-slate-600 mb-6 leading-relaxed">
-              Sebanyak <strong>{successInfo.count} dokumen</strong> milik <strong>{successInfo.name}</strong> berhasil diunggah ke Google Drive dan disinkronkan ke database E-Arsip.
+              Sebanyak <strong>{successInfo.count} berkas dokumen</strong> milik <strong>{successInfo.name}</strong> telah berhasil disimpan ke Google Drive dan tercatat di database E-Arsip.
             </p>
             <button
               type="button"
@@ -683,9 +749,9 @@ export default function FormUploadView({
                 setShowSuccessModal(false);
                 onUploadSuccess();
               }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md transition-colors cursor-pointer"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-colors cursor-pointer"
             >
-              Selesai & Lihat Dashboard
+              Lihat di Daftar Unduh
             </button>
           </div>
         </div>

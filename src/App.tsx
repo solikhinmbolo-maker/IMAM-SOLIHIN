@@ -11,11 +11,14 @@ import {
   Menu, 
   X, 
   ChevronDown, 
-  ChevronRight,
   Shield,
+  ArrowLeft,
+  ChevronRight,
   HardDrive,
   Database,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
@@ -36,7 +39,6 @@ export default function App() {
       const saved = localStorage.getItem(DB_KEYS.AUTH_USER);
       if (saved) return JSON.parse(saved);
     } catch {}
-    // Default logged in user for immediate experience
     return {
       email: 'admin@alhicam.sch.id',
       name: 'Solikhin Mbolo',
@@ -48,21 +50,19 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
   const [activeSubKategori, setActiveSubKategori] = useState<SubKategori>('Arsip Siswa');
 
-  // Accordion Menus
+  // Accordion Menus in Sidebar
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [unduhMenuOpen, setUnduhMenuOpen] = useState(false);
 
-  // Mobile sidebar drawer
+  // Mobile sidebar drawer & profile sheet
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileProfileSheetOpen, setMobileProfileSheetOpen] = useState(false);
 
   // Modals
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showSettingModal, setShowSettingModal] = useState(false);
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
-
-  // Welcome Toast Notification
-  const [showWelcomeToast, setShowWelcomeToast] = useState(true);
 
   // Live Clock (WIB)
   const [clockString, setClockString] = useState('');
@@ -90,20 +90,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Hide toast after 5s
-  useEffect(() => {
-    if (showWelcomeToast) {
-      const timer = setTimeout(() => {
-        setShowWelcomeToast(false);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [showWelcomeToast]);
-
   const handleLoginSuccess = (user: { email: string; name: string; role: string }) => {
     setCurrentUser(user);
     localStorage.setItem(DB_KEYS.AUTH_USER, JSON.stringify(user));
-    setShowWelcomeToast(true);
     setActivePage('dashboard');
   };
 
@@ -111,6 +100,7 @@ export default function App() {
     localStorage.removeItem(DB_KEYS.AUTH_USER);
     setCurrentUser(null);
     setShowLogoutModal(false);
+    setMobileProfileSheetOpen(false);
   };
 
   if (!currentUser) {
@@ -127,36 +117,31 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-['Poppins'] text-slate-800 antialiased selection:bg-blue-500 selection:text-white">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-['Poppins'] text-slate-800 antialiased selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
       
-      {/* 1. WELCOME TOAST (MUNCUL 5 DETIK) */}
-      {showWelcomeToast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[99999] bg-sky-100/95 border border-sky-300 text-sky-900 px-6 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-lg backdrop-blur-md flex items-center gap-2 animate-bounce">
-          <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
-          <span>Selamat {currentUser.name}, Anda Berhasil Login Sebagai Admin</span>
-        </div>
-      )}
-
-      {/* 2. MOBILE OVERLAY */}
-      {mobileSidebarOpen && (
+      {/* 1. MOBILE DRAWER OVERLAY */}
+      {(mobileSidebarOpen || mobileProfileSheetOpen) && (
         <div 
-          onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden transition-opacity"
+          onClick={() => {
+            setMobileSidebarOpen(false);
+            setMobileProfileSheetOpen(false);
+          }}
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
         />
       )}
 
-      {/* 3. SIDEBAR NAVIGATION */}
+      {/* 2. SIDEBAR NAVIGATION (DESKTOP & ACCESSIBLE AS DRAWER) */}
       <aside className={`
-        fixed top-0 bottom-0 left-0 z-50 w-64 bg-slate-900 text-slate-200 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
+        fixed top-0 bottom-0 left-0 z-50 w-64 bg-[#0F172A] text-slate-200 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
         ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Sidebar Header with Logo */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
               src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
               alt="Logo SMP Al-Hikam" 
-              className="w-11 h-11 object-contain drop-shadow"
+              className="w-10 h-10 object-contain drop-shadow"
             />
             <div>
               <h2 className="text-sm font-bold tracking-wider text-white">DIGITAL_ARSIP</h2>
@@ -165,7 +150,7 @@ export default function App() {
           </div>
           <button 
             onClick={() => setMobileSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white"
+            className="lg:hidden p-1.5 rounded-xl text-slate-400 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
@@ -182,7 +167,7 @@ export default function App() {
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
               activePage === 'dashboard'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -196,7 +181,7 @@ export default function App() {
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
                 activePage === 'upload'
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -218,7 +203,7 @@ export default function App() {
                     }}
                     className={`w-full text-left py-1.5 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                       activePage === 'upload' && activeSubKategori === sub
-                        ? 'text-blue-400 bg-blue-500/10 font-semibold'
+                        ? 'text-blue-400 bg-blue-500/15 font-semibold'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -236,7 +221,7 @@ export default function App() {
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
                 activePage === 'unduh'
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -258,7 +243,7 @@ export default function App() {
                     }}
                     className={`w-full text-left py-1.5 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                       activePage === 'unduh' && activeSubKategori === sub
-                        ? 'text-blue-400 bg-blue-500/10 font-semibold'
+                        ? 'text-blue-400 bg-blue-500/15 font-semibold'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -278,14 +263,14 @@ export default function App() {
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
               activePage === 'rekap'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             }`}
           >
             <CheckSquare className="w-4 h-4" />
             <span>Rekap Arsip</span>
           </button>
 
-          {/* Label Divider */}
+          {/* Divider */}
           <div className="pt-4 pb-1 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
             MANAJEMEN & LAPORAN
           </div>
@@ -299,7 +284,7 @@ export default function App() {
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
               activePage === 'laporan'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -312,7 +297,7 @@ export default function App() {
               setShowUserModal(true);
               setMobileSidebarOpen(false);
             }}
-            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all cursor-pointer"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all cursor-pointer"
           >
             <Users className="w-4 h-4" />
             <span>Manajemen User</span>
@@ -324,7 +309,7 @@ export default function App() {
               setShowSettingModal(true);
               setMobileSidebarOpen(false);
             }}
-            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all cursor-pointer"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all cursor-pointer"
           >
             <Settings className="w-4 h-4" />
             <span>Pengaturan Sistem</span>
@@ -332,7 +317,7 @@ export default function App() {
         </div>
 
         {/* Sidebar Footer System Info */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/60">
+        <div className="p-4 border-t border-slate-800/80 bg-slate-950/70">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm">
               <Shield className="w-4 h-4" />
@@ -345,20 +330,16 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 4. MAIN CONTENT AREA */}
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-screen pb-20 lg:pb-8">
+      {/* 3. MAIN CONTENT CONTAINER */}
+      <main className="flex-1 lg:ml-64 flex flex-col min-h-screen pb-24 lg:pb-8 w-full max-w-full overflow-x-hidden">
         
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-slate-900/85 backdrop-blur-xl border-b-2 border-blue-500/70 text-white px-4 sm:px-8 py-3.5 shadow-md flex items-center justify-between">
+        {/* ============================================================== */}
+        {/* DESKTOP HEADER (TETAP SAMA PERSIS DENGAN YANG DISUKAI USER)     */}
+        {/* ============================================================== */}
+        <header className="hidden lg:flex sticky top-0 z-30 bg-[#0F172A]/90 backdrop-blur-xl border-b-2 border-blue-500/70 text-white px-8 py-3.5 shadow-md items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white transition-colors cursor-pointer"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h1 className="text-lg font-bold text-white tracking-tight">
                 {pageTitles[activePage]}
               </h1>
               <p className="text-[11px] text-slate-300 font-mono flex items-center gap-1.5 mt-0.5">
@@ -368,8 +349,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-5">
-            {/* Logout button */}
+          <div className="flex items-center gap-5">
             <button
               onClick={() => setShowLogoutModal(true)}
               className="flex flex-col items-center justify-center text-red-400 hover:text-red-300 transition-transform active:scale-95 cursor-pointer group"
@@ -381,8 +361,7 @@ export default function App() {
               <span className="text-[10px] font-bold text-red-400 mt-1 uppercase tracking-wider">Logout</span>
             </button>
 
-            {/* User Profile Widget */}
-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-slate-700/80">
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-700/80">
               <div className="text-right">
                 <span className="text-xs font-bold text-white block leading-tight">{currentUser.name}</span>
                 <span className="text-[10px] text-cyan-400 font-semibold block">{currentUser.role}</span>
@@ -399,8 +378,80 @@ export default function App() {
           </div>
         </header>
 
-        {/* View Contents */}
-        <div className="p-4 sm:p-8 flex-1">
+        {/* ============================================================== */}
+        {/* REFINED MOBILE HEADER (ORIGINAL DARK WITH RICH GRADIENT & GLOW)*/}
+        {/* ============================================================== */}
+        <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-[#080E21] via-[#0F1B3E] to-[#0A132C] text-white px-4 sm:px-6 py-4 border-b-2 border-blue-500/60 shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden">
+          
+          {/* Subtle Ambient Gradient Light Reflections (No stiff solid color) */}
+          <div className="absolute -top-10 left-1/4 w-48 h-28 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-8 right-12 w-40 h-20 bg-cyan-400/15 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 flex items-center justify-between">
+            {activePage === 'dashboard' ? (
+              /* Brand & Logo with deep gradient and clean typography */
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 p-1 shadow-md shadow-blue-500/30 flex items-center justify-center flex-shrink-0 border border-white/20">
+                  <img 
+                    src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
+                    alt="Logo SMP Al-Hikam" 
+                    className="w-full h-full object-contain drop-shadow"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-sm font-extrabold tracking-tight text-white leading-none drop-shadow-sm">
+                      E-ARSIP AL-HICAM
+                    </h1>
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-slate-300 font-medium tracking-wide mt-1">
+                    SMP Al-Hikam • Digital Portal
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Contextual Sub-page Header with Back Navigation */
+              <button
+                onClick={() => setActivePage('dashboard')}
+                className="flex items-center gap-2.5 text-slate-200 hover:text-white transition-colors cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-slate-200 shadow-sm">
+                  <ArrowLeft className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest block leading-none">Kembali</span>
+                  <span className="text-sm font-bold text-white block mt-0.5 max-w-[210px] truncate">
+                    {pageTitles[activePage].split('(')[0]}
+                  </span>
+                </div>
+              </button>
+            )}
+
+            {/* Right: Single Refined Profile Pill Trigger */}
+            <button
+              onClick={() => setMobileProfileSheetOpen(true)}
+              className="flex items-center gap-2.5 p-1 pl-3 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-white active:scale-95 transition-all cursor-pointer shadow-md"
+              title="Profil & Opsi Cepat"
+            >
+              <div className="text-right hidden xs:block">
+                <span className="text-[11px] font-bold text-white block leading-none truncate max-w-[90px]">Pak Solikhin</span>
+                <span className="text-[9px] text-cyan-400 font-medium leading-none block mt-0.5">Admin</span>
+              </div>
+              <div className="relative">
+                <img
+                  src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=100"
+                  alt="Avatar"
+                  className="w-7 h-7 rounded-full border border-blue-400 object-cover"
+                />
+                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border border-slate-900" />
+              </div>
+            </button>
+          </div>
+        </header>
+
+        {/* View Contents with top padding for fixed header in mobile */}
+        <div className="p-3.5 sm:p-8 pt-[82px] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
           {activePage === 'dashboard' && (
             <DashboardView
               onNavigate={(page, sub) => {
@@ -439,86 +490,219 @@ export default function App() {
         </div>
       </main>
 
-      {/* 5. MOBILE BOTTOM NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 flex lg:hidden items-center justify-around py-2 shadow-2xl">
+      {/* ============================================================== */}
+      {/* 4. MODERN MOBILE PROFILE & UTILITY SHEET (MODERN EXECUTIVE MENU) */}
+      {/* ============================================================== */}
+      {mobileProfileSheetOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0F172A] border-t border-slate-800 text-white rounded-t-3xl p-5 shadow-2xl animate-scaleUp lg:hidden">
+          <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-4" />
+
+          {/* User info card */}
+          <div className="flex items-center gap-3.5 pb-4 mb-4 border-b border-slate-800">
+            <img
+              src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=100"
+              alt="Avatar"
+              className="w-12 h-12 rounded-2xl border-2 border-blue-500 object-cover shadow-md"
+            />
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-white truncate">{currentUser.name}</h3>
+              <p className="text-xs text-slate-400 font-mono truncate">{currentUser.email}</p>
+              <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                {currentUser.role}
+              </span>
+            </div>
+            <button
+              onClick={() => setMobileProfileSheetOpen(false)}
+              className="p-1 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Action options list */}
+          <div className="space-y-1 mb-4">
+            <button
+              onClick={() => {
+                setMobileProfileSheetOpen(false);
+                setShowSettingModal(true);
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <span>Pengaturan Sistem & Database</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileProfileSheetOpen(false);
+                setShowUserModal(true);
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+                <span>Manajemen Hak Akses Pengguna</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileProfileSheetOpen(false);
+                setMobileSidebarOpen(true);
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Menu className="w-4 h-4" />
+                </div>
+                <span>Buka Menu Navigasi Lengkap</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Logout button */}
+          <button
+            onClick={() => {
+              setMobileProfileSheetOpen(false);
+              setShowLogoutModal(true);
+            }}
+            className="w-full py-3 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          >
+            <Power className="w-4 h-4" />
+            <span>Keluar dari Akun (Logout)</span>
+          </button>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 5. REFINED FLOATING BOTTOM NAVIGATION (MINIMALIST & NATIVE FEEL)*/}
+      {/* ============================================================== */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex lg:hidden items-center justify-around py-1.5 px-2">
+        {/* Dashboard */}
         <button
           onClick={() => setActivePage('dashboard')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium transition-colors ${
-            activePage === 'dashboard' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+            activePage === 'dashboard'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <LayoutDashboard className="w-5 h-5" />
-          <span>Dashboard</span>
+          <div className={`p-1.5 rounded-xl transition-all ${
+            activePage === 'dashboard' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+          }`}>
+            <LayoutDashboard className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] tracking-tight">Beranda</span>
         </button>
 
+        {/* Upload */}
         <button
           onClick={() => {
             setActivePage('upload');
             setActiveSubKategori('Arsip Siswa');
           }}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium transition-colors ${
-            activePage === 'upload' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+            activePage === 'upload'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <CloudUpload className="w-5 h-5" />
-          <span>Upload</span>
+          <div className={`p-1.5 rounded-xl transition-all ${
+            activePage === 'upload' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+          }`}>
+            <CloudUpload className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] tracking-tight">Upload</span>
         </button>
 
+        {/* Unduh */}
         <button
           onClick={() => {
             setActivePage('unduh');
             setActiveSubKategori('Arsip Siswa');
           }}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium transition-colors ${
-            activePage === 'unduh' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+            activePage === 'unduh'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <CloudDownload className="w-5 h-5" />
-          <span>Unduh</span>
+          <div className={`p-1.5 rounded-xl transition-all ${
+            activePage === 'unduh' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+          }`}>
+            <CloudDownload className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] tracking-tight">Unduh</span>
         </button>
 
+        {/* Rekap */}
         <button
           onClick={() => setActivePage('rekap')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium transition-colors ${
-            activePage === 'rekap' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+            activePage === 'rekap'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <CheckSquare className="w-5 h-5" />
-          <span>Rekap</span>
+          <div className={`p-1.5 rounded-xl transition-all ${
+            activePage === 'rekap' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+          }`}>
+            <CheckSquare className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] tracking-tight">Rekap</span>
         </button>
 
+        {/* Laporan */}
         <button
-          onClick={() => setShowSettingModal(true)}
-          className="flex flex-col items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-slate-200 transition-colors"
+          onClick={() => setActivePage('laporan')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+            activePage === 'laporan'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
         >
-          <Settings className="w-5 h-5" />
-          <span>Sistem</span>
+          <div className={`p-1.5 rounded-xl transition-all ${
+            activePage === 'laporan' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+          }`}>
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] tracking-tight">Laporan</span>
         </button>
       </nav>
 
       {/* 6. MODAL KONFIRMASI LOGOUT */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp text-white">
-            <div className="w-16 h-16 rounded-full bg-red-500/15 text-red-500 flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
-              <Power className="w-7 h-7" />
+          <div className="bg-[#0F172A] border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp text-white">
+            <div className="w-14 h-14 rounded-full bg-red-500/15 text-red-500 flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+              <Power className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold mb-1">Konfirmasi Logout</h3>
+            <h3 className="text-base sm:text-lg font-bold mb-1">Konfirmasi Logout</h3>
             <p className="text-xs text-slate-400 mb-6 leading-relaxed">
               Apakah Anda yakin ingin keluar dari sistem E-Arsip Al-Hicam?
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex-1 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold rounded-xl shadow-md transition-all cursor-pointer"
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
               >
                 Ya, Keluar
               </button>

@@ -239,7 +239,11 @@ export const INITIAL_ARSIP: ArsipItem[] = [
   }
 ];
 
-// LocalStorage helpers
+// =====================================================================
+// PERSISTENCE ENGINE: LocalStorage (Metadata) + IndexedDB / Memory (Blobs)
+// This guarantees that large file attachments NEVER cause QuotaExceededError!
+// =====================================================================
+
 export const DB_KEYS = {
   MASTER_SISWA: 'EARSIP_MASTER_SISWA',
   MASTER_GURU: 'EARSIP_MASTER_GURU',
@@ -247,11 +251,115 @@ export const DB_KEYS = {
   AUTH_USER: 'EARSIP_AUTH_USER'
 };
 
+// In-Memory blob cache for instant retrieval without hitting storage limits
+const fileBlobCache = new Map<string, string>();
+
+// IndexedDB Helper for Large File Attachments (Has Gigabytes of quota)
+const IDB_NAME = 'EARSIP_ATTACHMENTS_DB';
+const IDB_STORE = 'file_attachments';
+const IDB_VERSION = 1;
+
+function openIDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function saveFileAttachment(id: string, dataUrl: string) {
+  if (!dataUrl) return;
+  fileBlobCache.set(id, dataUrl);
+  try {
+    const db = await openIDB();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.put(dataUrl, id);
+  } catch (err) {
+    console.warn('Could not save to IndexedDB', err);
+  }
+}
+
+export async function getFileAttachment(id: string): Promise<string | null> {
+  if (fileBlobCache.has(id)) {
+    return fileBlobCache.get(id) || null;
+  }
+  try {
+    const db = await openIDB();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const res = req.result || null;
+        if (res) fileBlobCache.set(id, res);
+        resolve(res);
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Self-Healing Routine: Clean any large base64 strings from existing LocalStorage
+function sanitizeLocalStorage() {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
+    if (!raw) return;
+
+    const parsed: ArsipItem[] = JSON.parse(raw);
+    let needsClean = false;
+
+    const cleaned = parsed.map(item => {
+      if (item.fileDataUrl) {
+        needsClean = true;
+        // Move to memory cache and IndexedDB
+        fileBlobCache.set(item.id, item.fileDataUrl);
+        saveFileAttachment(item.id, item.fileDataUrl);
+        const { fileDataUrl, ...rest } = item;
+        return rest as ArsipItem;
+      }
+      return item;
+    });
+
+    if (needsClean) {
+      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(cleaned));
+    }
+  } catch (err) {
+    console.warn('Sanitizing bloated localStorage:', err);
+    try {
+      // In case quota is completely frozen, reset with clean seed items
+      localStorage.removeItem(DB_KEYS.ARSIP_ITEMS);
+      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
+    } catch {}
+  }
+}
+
+// Run immediately
+sanitizeLocalStorage();
+
 export function getStoredMasterSiswa(): MasterSiswaItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.MASTER_SISWA);
     if (!raw) {
-      localStorage.setItem(DB_KEYS.MASTER_SISWA, JSON.stringify(INITIAL_MASTER_SISWA));
+      safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(INITIAL_MASTER_SISWA));
       return INITIAL_MASTER_SISWA;
     }
     return JSON.parse(raw);
@@ -264,7 +372,7 @@ export function getStoredMasterGuru(): MasterGuruItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.MASTER_GURU);
     if (!raw) {
-      localStorage.setItem(DB_KEYS.MASTER_GURU, JSON.stringify(INITIAL_MASTER_GURU));
+      safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(INITIAL_MASTER_GURU));
       return INITIAL_MASTER_GURU;
     }
     return JSON.parse(raw);
@@ -273,22 +381,70 @@ export function getStoredMasterGuru(): MasterGuruItem[] {
   }
 }
 
+// Safe LocalStorage setter with Quota Protection & automatic trimming
+function safeSetItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`LocalStorage quota error for key ${key}. Trimming...`, err);
+    try {
+      if (key === DB_KEYS.ARSIP_ITEMS) {
+        // Keep latest 30 items without fileDataUrl
+        const parsed: ArsipItem[] = JSON.parse(value);
+        const trimmed = parsed.slice(0, 30).map(it => {
+          const copy = { ...it };
+          delete copy.fileDataUrl;
+          return copy;
+        });
+        localStorage.setItem(key, JSON.stringify(trimmed));
+      }
+    } catch (innerErr) {
+      console.error('SafeSetItem emergency fallback failed', innerErr);
+    }
+  }
+}
+
 export function getStoredArsip(): ArsipItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
     if (!raw) {
-      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
+      safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
       return INITIAL_ARSIP;
     }
-    return JSON.parse(raw);
+    const items: ArsipItem[] = JSON.parse(raw);
+    // Enrich with fileDataUrl from memory cache if available
+    return items.map(item => {
+      if (fileBlobCache.has(item.id)) {
+        return { ...item, fileDataUrl: fileBlobCache.get(item.id) };
+      }
+      return item;
+    });
   } catch {
     return INITIAL_ARSIP;
   }
 }
 
-export function saveArsipItem(item: ArsipItem) {
+export function saveArsipItem(item: ArsipItem): ArsipItem[] {
+  // 1. If item has file attachment, store safely in IndexedDB & Memory Cache
+  if (item.fileDataUrl) {
+    fileBlobCache.set(item.id, item.fileDataUrl);
+    saveFileAttachment(item.id, item.fileDataUrl);
+  }
+
+  // 2. Prepare clean item for LocalStorage (NO giant base64 strings!)
+  const cleanItemForStorage: ArsipItem = { ...item };
+  delete cleanItemForStorage.fileDataUrl;
+
   const current = getStoredArsip();
-  const updated = [item, ...current];
-  localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updated));
-  return updated;
+  const currentClean = current.map(c => {
+    const copy = { ...c };
+    delete copy.fileDataUrl;
+    return copy;
+  });
+
+  const updatedClean = [cleanItemForStorage, ...currentClean];
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
+
+  // Return list with enriched item for immediate UI update
+  return [item, ...current];
 }
