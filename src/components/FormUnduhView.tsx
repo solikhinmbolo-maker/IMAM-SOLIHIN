@@ -12,9 +12,10 @@ import {
   FileText,
   User,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
-import { ArsipItem, getStoredArsip, fetchLiveArsipFromGoogle } from '../data/mockDatabase';
+import { ArsipItem, getStoredArsip, fetchLiveArsipFromGoogle, syncAllArsipToGoogleSheet } from '../data/mockDatabase';
 
 interface FormUnduhViewProps {
   kategoriMenu?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -32,6 +33,7 @@ export default function FormUnduhView({
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadingItemName, setDownloadingItemName] = useState('');
   const [isSyncingFromGoogle, setIsSyncingFromGoogle] = useState(false);
+  const [isPushingToGoogle, setIsPushingToGoogle] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
 
   // Get data
@@ -130,12 +132,30 @@ export default function FormUnduhView({
           <button
             type="button"
             onClick={async () => {
+              setIsPushingToGoogle(true);
+              setSyncStatus('Sedang menulis berkas ke tabel Google Spreadsheet...');
+              const res = await syncAllArsipToGoogleSheet();
+              setIsPushingToGoogle(false);
+              setSyncStatus(res.success ? `✓ ${res.message}` : `⚠️ ${res.message}`);
+              setTimeout(() => setSyncStatus(''), 5000);
+            }}
+            disabled={isPushingToGoogle}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 text-xs font-semibold cursor-pointer active:scale-95 transition-all"
+            title="Kirim dan catat semua berkas yang ada di aplikasi ke Google Spreadsheet"
+          >
+            <ExternalLink className={`w-3.5 h-3.5 ${isPushingToGoogle ? 'animate-spin text-purple-600' : ''}`} />
+            <span>{isPushingToGoogle ? 'Mencatat...' : 'Catat ke Spreadsheet'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
               setIsSyncingFromGoogle(true);
               setSyncStatus('Memperbarui dari Google Sheet...');
               const res = await fetchLiveArsipFromGoogle();
               setIsSyncingFromGoogle(false);
               if (res.success) {
-                setSyncStatus(`✓ Berhasil diperbarui (${res.items?.length || 0} berkas)`);
+                setSyncStatus(`✓ Berhasil disinkronkan (${res.items?.length || 0} berkas)`);
                 setTimeout(() => setSyncStatus(''), 4000);
               } else {
                 setSyncStatus(`Info: ${res.message}`);

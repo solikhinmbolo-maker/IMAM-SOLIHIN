@@ -944,7 +944,48 @@ export async function syncMasterToGoogleSheet(): Promise<{ success: boolean; mes
 }
 
 /**
+ * Push all local archives to Google Spreadsheet (safe bulk recording)
+ */
+export async function syncAllArsipToGoogleSheet(): Promise<{ success: boolean; message: string; count: number }> {
+  const config = getStoredSyncConfig();
+  if (!config.webhookUrl || !config.webhookUrl.startsWith('http')) {
+    return { success: false, message: 'URL Webhook belum diatur di Pengaturan Google Cloud', count: 0 };
+  }
+  const items = getStoredArsip();
+  if (items.length === 0) {
+    return { success: false, message: 'Tidak ada berkas yang perlu dikirim', count: 0 };
+  }
+
+  try {
+    const payload = {
+      action: 'SYNC_ALL_ARSIP_ITEMS',
+      spreadsheetId: config.spreadsheetId,
+      items: items.map(it => {
+        const copy = { ...it };
+        delete copy.fileDataUrl;
+        return copy;
+      })
+    };
+
+    const response = await fetch(config.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result && result.status === 'success') {
+      return { success: true, message: `Berhasil mencatat ${items.length} berkas ke Google Spreadsheet!`, count: items.length };
+    }
+    return { success: false, message: result?.message || 'Respon webhook gagal', count: 0 };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal mengirim data ke Google Spreadsheet', count: 0 };
+  }
+}
+
+/**
  * Fetch live archives directly from Google Spreadsheet / Drive via Webhook
+ * Merges with local data and NEVER wipes existing uploaded documents!
  */
 export async function fetchLiveArsipFromGoogle(): Promise<{ success: boolean; items?: ArsipItem[]; message?: string }> {
   const config = getStoredSyncConfig();
@@ -952,10 +993,25 @@ export async function fetchLiveArsipFromGoogle(): Promise<{ success: boolean; it
     return { success: false, message: 'URL Webhook belum diatur di Pengaturan Google Cloud' };
   }
   try {
+    const currentLocal = getStoredArsip();
     const response = await fetch(`${config.webhookUrl}?action=getArsip&t=${Date.now()}`);
     const data = await response.json();
+    
     if (data && data.status === 'success' && Array.isArray(data.items)) {
-      const items: ArsipItem[] = data.items.map((it: any) => ({
+      if (data.items.length === 0) {
+        // Sheet is currently empty; if local has files, automatically sync local files to sheet!
+        if (currentLocal.length > 0) {
+          syncAllArsipToGoogleSheet();
+          return { 
+            success: true, 
+            items: currentLocal, 
+            message: `Spreadsheet masih kosong. Mengirim ${currentLocal.length} berkas lokal ke Spreadsheet...` 
+          };
+        }
+        return { success: true, items: [], message: 'Spreadsheet kosong' };
+      }
+
+      const remoteItems: ArsipItem[] = data.items.map((it: any) => ({
         id: it.id || `ARS-${Date.now()}`,
         tanggal: it.tanggal || new Date().toLocaleDateString('id-ID'),
         tahun: it.tahun || '-',
@@ -968,8 +1024,27 @@ export async function fetchLiveArsipFromGoogle(): Promise<{ success: boolean; it
         uploader: it.uploader || 'Admin',
         linkDrive: it.driveUrl || it.linkDrive || '#'
       }));
-      safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(items));
-      return { success: true, items };
+
+      // Merge remote items with local items (matching by ID or subjek+kategori)
+      const mergedMap = new Map<string, ArsipItem>();
+      currentLocal.forEach(it => mergedMap.set(it.id, it));
+      remoteItems.forEach(it => {
+        const existing = mergedMap.get(it.id);
+        if (existing && existing.fileDataUrl) {
+          mergedMap.set(it.id, { ...it, fileDataUrl: existing.fileDataUrl });
+        } else {
+          mergedMap.set(it.id, it);
+        }
+      });
+
+      const finalMerged = Array.from(mergedMap.values());
+      safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(finalMerged.map(f => {
+        const c = { ...f };
+        delete c.fileDataUrl;
+        return c;
+      })));
+
+      return { success: true, items: finalMerged, message: `Berhasil sinkron ${remoteItems.length} berkas dari Spreadsheet` };
     }
     return { success: false, message: data?.message || 'Gagal memuat data' };
   } catch (err: any) {
