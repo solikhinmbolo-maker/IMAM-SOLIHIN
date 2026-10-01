@@ -355,6 +355,14 @@ export default function FormUploadView({
             } else {
               saveArsipItem(itemToSave);
             }
+
+            // Sync each kolektif document to Google Cloud
+            syncItemToGoogleCloud(itemToSave, fileObj.base64).then(res => {
+              if (res.success && res.driveUrl) {
+                itemToSave.linkDrive = res.driveUrl;
+                replaceArsipItem(newId, itemToSave);
+              }
+            }).catch(e => console.warn('Kolektif sync warning:', e));
           });
 
           setStoredArsipList(getStoredArsip());

@@ -1,6 +1,17 @@
-import React from 'react';
-import { X, Printer, FileText, Download, CheckCircle, ExternalLink } from 'lucide-react';
-import { ArsipItem } from '../data/mockDatabase';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  Printer, 
+  FileText, 
+  Download, 
+  CheckCircle, 
+  ExternalLink,
+  Eye, 
+  Award, 
+  Loader2,
+  AlertCircle
+} from 'lucide-react';
+import { ArsipItem, getFileAttachment, getStoredSyncConfig } from '../data/mockDatabase';
 
 interface PreviewModalProps {
   item: ArsipItem | null;
@@ -10,47 +21,122 @@ interface PreviewModalProps {
 }
 
 export default function PreviewModal({ item, onClose, onPrint, onDownload }: PreviewModalProps) {
+  const [activeTab, setActiveTab] = useState<'file' | 'certificate'>('file');
+  const [fileData, setFileData] = useState<string>('');
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
+
+  const syncConfig = getStoredSyncConfig();
+  const folderId = syncConfig.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
+
+  useEffect(() => {
+    if (!item) return;
+
+    // Reset tab to file
+    setActiveTab('file');
+
+    if (item.fileDataUrl) {
+      setFileData(item.fileDataUrl);
+      return;
+    }
+
+    // Try loading from IndexedDB
+    setIsLoadingFile(true);
+    getFileAttachment(item.id)
+      .then((data) => {
+        if (data) {
+          setFileData(data);
+        } else {
+          setFileData('');
+          // If no physical file (e.g. initial demo items), default to certificate
+          setActiveTab('certificate');
+        }
+      })
+      .catch(() => {
+        setFileData('');
+        setActiveTab('certificate');
+      })
+      .finally(() => {
+        setIsLoadingFile(false);
+      });
+  }, [item]);
+
   if (!item) return null;
 
+  const isPdf = fileData.startsWith('data:application/pdf') || 
+                (item.namaFileAsli && item.namaFileAsli.toLowerCase().endsWith('.pdf'));
+  const isImage = fileData.startsWith('data:image') || 
+                  (item.namaFileAsli && /\.(jpe?g|png|webp|gif|bmp)$/i.test(item.namaFileAsli));
+
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn font-['Poppins']">
-      <div className="relative w-full max-w-4xl h-[90vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn font-['Poppins']">
+      <div className="relative w-full max-w-5xl h-[92vh] bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-950 border-b border-slate-800 text-white">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-950 border-b border-slate-800 text-white flex-wrap gap-2">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-              <FileText className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+              <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold truncate max-w-xs sm:max-w-md">{item.namaFileAsli || item.subjek}</h4>
+              <h4 className="text-sm font-bold truncate max-w-[200px] sm:max-w-md text-white">
+                {item.namaFileAsli || item.subjek}
+              </h4>
               <p className="text-[11px] text-slate-400 flex items-center gap-2">
-                <span>{item.kategori}</span>
+                <span className="text-cyan-400 font-semibold">{item.kategori}</span>
                 <span>•</span>
-                <span>{item.tanggal}</span>
+                <span>{item.subjek}</span>
                 <span>•</span>
-                <span className="font-mono text-cyan-400">{item.id}</span>
+                <span className="font-mono text-slate-300">{item.id}</span>
               </p>
             </div>
           </div>
 
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setActiveTab('file')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'file'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Berkas Asli ({item.namaFileAsli ? item.namaFileAsli.split('.').pop()?.toUpperCase() : 'PDF'})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('certificate')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'certificate'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Lembar Verifikasi</span>
+            </button>
+          </div>
+
+          {/* Action Buttons */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => onPrint(item)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
               title="Cetak Dokumen"
             >
               <Printer className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Cetak</span>
             </button>
+
             <button
               onClick={() => onDownload(item)}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
               title="Unduh Berkas"
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Unduh</span>
             </button>
+
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center transition-colors ml-1 cursor-pointer"
@@ -61,75 +147,149 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
           </div>
         </div>
 
-        {/* Content Viewer */}
-        <div className="flex-1 bg-slate-950 p-4 sm:p-8 overflow-y-auto flex items-center justify-center">
-          {item.fileDataUrl && item.fileDataUrl.startsWith('data:image') ? (
-            <img 
-              src={item.fileDataUrl} 
-              alt={item.namaFileAsli} 
-              className="max-h-full max-w-full object-contain rounded-lg shadow-lg border border-slate-800" 
-            />
+        {/* Content Viewer Body */}
+        <div className="flex-1 bg-slate-950 p-2 sm:p-5 overflow-y-auto flex items-center justify-center relative">
+          
+          {isLoadingFile ? (
+            <div className="flex flex-col items-center gap-3 text-slate-400 py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="text-xs font-medium">Memuat berkas fisik dokumen...</span>
+            </div>
+          ) : activeTab === 'file' ? (
+            /* ============================================================== */
+            /* 1. TAMPILAN BERKAS ASLI (PDF / GAMBAR)                          */
+            /* ============================================================== */
+            fileData ? (
+              isPdf ? (
+                <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl">
+                  <iframe
+                    src={fileData}
+                    className="w-full h-full min-h-[70vh] border-0 rounded-2xl bg-white"
+                    title={item.namaFileAsli || 'Dokumen PDF'}
+                  />
+                </div>
+              ) : isImage ? (
+                <div className="w-full h-full flex items-center justify-center p-2 overflow-auto">
+                  <img
+                    src={fileData}
+                    alt={item.namaFileAsli}
+                    className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-700"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-slate-700 bg-white">
+                  <iframe
+                    src={fileData}
+                    className="w-full h-full min-h-[70vh] border-0"
+                    title={item.namaFileAsli}
+                  />
+                </div>
+              )
+            ) : (
+              /* Fallback if no physical file in cache */
+              <div className="text-center p-8 max-w-md bg-slate-900 border border-slate-800 rounded-3xl text-slate-300 space-y-4 shadow-xl">
+                <AlertCircle className="w-12 h-12 text-amber-400 mx-auto" />
+                <h4 className="text-base font-bold text-white">File Fisik Tersimpan di Google Drive</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Berkas <strong>{item.namaFileAsli || item.kategori}</strong> diunggah langsung ke penyimpanan Google Drive Anda. Anda dapat melihat lembar verifikasi digital atau membuka file langsung di Drive.
+                </p>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => setActiveTab('certificate')}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Buka Lembar Verifikasi
+                  </button>
+                  <a
+                    href={`https://drive.google.com/drive/folders/${folderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  >
+                    <span>Folder Drive</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            )
           ) : (
-            <div className="w-full max-w-2xl bg-white text-slate-800 p-8 sm:p-12 rounded-xl shadow-2xl border border-slate-300 relative">
-              {/* Formal Certificate/Document Header Mock */}
-              <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center">
-                <p className="text-[10px] tracking-widest font-bold text-slate-500 uppercase">KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI</p>
-                <h2 className="text-xl font-bold text-slate-900 tracking-wide mt-1">SMP AL-HIKAM</h2>
-                <p className="text-xs text-slate-600 mt-0.5">Sistem Informasi Manajemen E-Arsip Dokumen Sekolah Digital</p>
-                <p className="text-[10px] text-slate-500">Jl. Pesantren Al-Hikam, Kab. Jombang, Jawa Timur | NPSN: 20503412</p>
+            /* ============================================================== */
+            /* 2. LEMBAR VERIFIKASI DIGITAL RESMI (SURAT RESMI SEKOLAH)       */
+            /* ============================================================== */
+            <div className="w-full max-w-2xl bg-white text-slate-800 p-6 sm:p-10 rounded-2xl shadow-2xl border border-slate-200 relative my-auto animate-fadeIn">
+              {/* Formal Certificate/Document Header */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-5 text-center">
+                <p className="text-[10px] tracking-widest font-bold text-slate-500 uppercase">
+                  KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI
+                </p>
+                <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-wide mt-1">
+                  SMP AL-HIKAM
+                </h2>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Sistem Informasi Manajemen E-Arsip Dokumen Sekolah Digital
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  Jl. Pesantren Al-Hikam, Kab. Jombang, Jawa Timur | NPSN: 20503412
+                </p>
               </div>
 
               {/* Document Title */}
-              <div className="text-center my-6">
-                <h3 className="text-base font-bold uppercase underline tracking-wider text-slate-900">
+              <div className="text-center my-5">
+                <h3 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
                   {item.kategori}
                 </h3>
-                <p className="text-xs text-slate-600 mt-1">Nomor Registrasi Arsip: <strong>{item.id}</strong></p>
+                <p className="text-xs text-slate-600 mt-1">
+                  Nomor Registrasi Arsip: <strong className="font-mono text-blue-700">{item.id}</strong>
+                </p>
               </div>
 
-              {/* Document Body */}
-              <div className="space-y-3 text-xs sm:text-sm text-slate-700 leading-relaxed my-6">
+              {/* Document Details Table */}
+              <div className="space-y-2.5 text-xs sm:text-sm text-slate-700 leading-relaxed my-5">
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Nama Subjek / Pemilik</span>
+                  <span className="font-semibold text-slate-500">Nama Subjek / Pemilik</span>
                   <span className="col-span-2 font-bold text-slate-900">: {item.subjek}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Nomor Induk (NISN / NIP)</span>
-                  <span className="col-span-2 font-mono font-medium">: {item.identitas}</span>
+                  <span className="font-semibold text-slate-500">Nomor Induk (NISN / NIP)</span>
+                  <span className="col-span-2 font-mono font-bold text-blue-800">: {item.identitas}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Tahun Angkatan / Dokumen</span>
+                  <span className="font-semibold text-slate-500">Tahun Angkatan / Dokumen</span>
                   <span className="col-span-2 font-medium">: {item.tahun}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Kategori Dokumen</span>
+                  <span className="font-semibold text-slate-500">Kategori Dokumen</span>
                   <span className="col-span-2 font-medium">: {item.kategori} ({item.kategoriUtama})</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Tanggal Pengarsipan</span>
+                  <span className="font-semibold text-slate-500">Nama Berkas Asli</span>
+                  <span className="col-span-2 font-mono text-xs text-slate-600 truncate">: {item.namaFileAsli || '-'}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
+                  <span className="font-semibold text-slate-500">Tanggal Pengarsipan</span>
                   <span className="col-span-2 font-medium">: {item.tanggal}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-600">Petugas Pengunggah</span>
+                  <span className="font-semibold text-slate-500">Petugas Pengunggah</span>
                   <span className="col-span-2 font-medium">: {item.uploader}</span>
                 </div>
               </div>
 
-              {/* Verification Stamp & QR Mock */}
-              <div className="mt-8 pt-4 border-t border-slate-200 flex items-center justify-between">
+              {/* Verification Stamp */}
+              <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center justify-center text-emerald-600">
+                  <div className="w-11 h-11 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-center text-emerald-600">
                     <CheckCircle className="w-6 h-6" />
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-emerald-700 block">DOKUMEN TERVERIFIKASI DIGITAL</span>
-                    <span className="text-[9px] text-slate-500 block">Tersimpan aman di Google Drive E-Arsip Al-Hicam</span>
+                    <span className="text-[11px] font-bold text-emerald-800 block">DOKUMEN TERVERIFIKASI DIGITAL</span>
+                    <span className="text-[10px] text-slate-500 block">Tersimpan aman di Google Drive E-Arsip Al-Hikam</span>
                   </div>
                 </div>
 
                 <div className="text-right">
                   <span className="text-[10px] text-slate-500 block">Kepala Sekolah / Tim Tata Usaha</span>
-                  <span className="text-xs font-bold text-slate-900 block mt-4">Drs. H. Solikhin, M.Pd</span>
+                  <span className="text-xs font-bold text-slate-900 block mt-3">Drs. H. Solikhin, M.Pd</span>
                   <span className="text-[9px] text-slate-400 block">NIP. 197405121999031001</span>
                 </div>
               </div>
@@ -138,9 +298,12 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
         </div>
 
         {/* Footer info */}
-        <div className="px-5 py-2.5 bg-slate-950/80 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Google Drive Cloud Storage: FOLDER_ID: 1M_Ry_o-q7JGeXRfYdlpE8E2AuF_aOE8f</span>
-          <span className="text-cyan-400 font-mono">E-ARSIP AL-HICAM V1.0</span>
+        <div className="px-4 sm:px-6 py-2.5 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span>Google Drive Cloud Storage:</span>
+            <span className="font-mono text-cyan-400">{folderId}</span>
+          </div>
+          <span className="text-slate-500 font-mono text-[10px]">E-ARSIP SMP AL-HIKAM</span>
         </div>
       </div>
     </div>

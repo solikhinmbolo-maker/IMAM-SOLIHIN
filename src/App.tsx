@@ -233,7 +233,25 @@ function doPost(e) {
     // -------------------------------------------------------------
     // 2. OTOMATISASI STRUKTUR SHEET/TAB DI GOOGLE SPREADSHEET
     // -------------------------------------------------------------
-    var ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActiveSpreadsheet();
+    var ss = null;
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (eActive) {}
+
+    if (!ss && sheetId) {
+      try {
+        ss = SpreadsheetApp.openById(sheetId.toString().trim());
+      } catch (eId) {}
+    }
+
+    if (!ss) {
+      try {
+        var sheetFiles = rootFolder.getFilesByType(MimeType.GOOGLE_SHEETS);
+        if (sheetFiles.hasNext()) {
+          ss = SpreadsheetApp.open(sheetFiles.next());
+        }
+      } catch (eFolder) {}
+    }
     
     var headers = [
       'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
@@ -241,27 +259,29 @@ function doPost(e) {
       'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
     ];
 
-    // Otomatis buat Sheet 'REKAP_SEMUA_ARSIP' jika belum ada
-    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
-    var rowData = [
-      data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
-      data.tanggal || Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss'),
-      data.tahun || '-',
-      data.identitas || '-',
-      data.subjek || '-',
-      data.kategori || '-',
-      data.kategoriUtama || 'Arsip Siswa',
-      data.namaFile || '-',
-      data.ukuran || '-',
-      data.uploader || 'Admin',
-      fileUrl
-    ];
-    sheetSemua.appendRow(rowData);
+    if (ss) {
+      // 1. Simpan ke Tab Utama 'REKAP_SEMUA_ARSIP'
+      var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
+      var rowData = [
+        data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
+        data.tanggal || Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss'),
+        data.tahun || '-',
+        data.identitas || '-',
+        data.subjek || '-',
+        data.kategori || '-',
+        data.kategoriUtama || 'Arsip Siswa',
+        data.namaFile || '-',
+        data.ukuran || '-',
+        data.uploader || 'Admin',
+        fileUrl
+      ];
+      sheetSemua.appendRow(rowData);
 
-    // Otomatis catat juga ke tab kategori masing-masing
-    var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
-    var sheetKategori = getOrCreateSheet(ss, tabName, headers);
-    sheetKategori.appendRow(rowData);
+      // 2. Otomatis catat juga ke tab kategori masing-masing
+      var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
+      var sheetKategori = getOrCreateSheet(ss, tabName, headers);
+      sheetKategori.appendRow(rowData);
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -290,7 +310,14 @@ function getOrCreateFolder(parent, name) {
 function getOrCreateSheet(ss, name, headers) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    sheet = ss.insertSheet(name);
+    // Jika masih ada Sheet1 bawaan yang kosong, pakai dan ganti namanya
+    var defaultSheet = ss.getSheetByName('Sheet1') || ss.getSheetByName('Sheet 1');
+    if (defaultSheet && defaultSheet.getLastRow() === 0) {
+      defaultSheet.setName(name);
+      sheet = defaultSheet;
+    } else {
+      sheet = ss.insertSheet(name);
+    }
   }
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
@@ -298,7 +325,7 @@ function getOrCreateSheet(ss, name, headers) {
     range.setFontWeight('bold').setBackground('#0F172A').setFontColor('#FFFFFF');
     sheet.setFrozenRows(1);
     for (var i = 1; i <= headers.length; i++) {
-      sheet.autoResizeColumn(i);
+      try { sheet.autoResizeColumn(i); } catch(eResize) {}
     }
   }
   return sheet;
