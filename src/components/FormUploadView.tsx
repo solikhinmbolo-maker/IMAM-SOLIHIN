@@ -15,7 +15,12 @@ import {
   Paperclip,
   Upload,
   ArrowRight,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle,
+  History,
+  FileWarning,
+  CopyCheck,
+  X
 } from 'lucide-react';
 import { 
   MasterSiswaItem, 
@@ -26,7 +31,11 @@ import {
   KATEGORI_LAINNYA,
   getStoredMasterSiswa, 
   getStoredMasterGuru, 
-  saveArsipItem 
+  getStoredArsip,
+  saveArsipItem,
+  replaceArsipItem,
+  checkDuplicateArsip,
+  DuplicateCheckResult
 } from '../data/mockDatabase';
 
 interface FormUploadViewProps {
@@ -42,6 +51,18 @@ export default function FormUploadView({
 }: FormUploadViewProps) {
   const [modeUpload, setModeUpload] = useState<'individual' | 'kolektif'>('individual');
   const [jenisArsip, setJenisArsip] = useState<'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya'>(initialJenis);
+
+  // Sync with prop when user navigates via sidebar
+  useEffect(() => {
+    setJenisArsip(initialJenis);
+    setNamaSubjek('');
+    setIdentitas('');
+    setNamaDokumen('');
+    setSelectedFile(null);
+    setFileBase64('');
+    setKolektifFiles({});
+    setErrorMessage('');
+  }, [initialJenis]);
 
   // Master Data
   const [masterSiswa, setMasterSiswa] = useState<MasterSiswaItem[]>([]);
@@ -60,6 +81,13 @@ export default function FormUploadView({
   // Kolektif Upload Files mapping
   const [kolektifFiles, setKolektifFiles] = useState<{ [category: string]: { file: File; base64: string } }>({});
 
+  // Auto-Detect Duplicates State
+  const [duplicateCheck, setDuplicateCheck] = useState<DuplicateCheckResult>({ isDuplicate: false });
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showKolektifDuplicateModal, setShowKolektifDuplicateModal] = useState(false);
+  const [kolektifDuplicates, setKolektifDuplicates] = useState<{ kat: string; existing: ArsipItem }[]>([]);
+  const [storedArsipList, setStoredArsipList] = useState<ArsipItem[]>([]);
+
   // Upload Progress & State
   const [isUploading, setIsUploading] = useState(false);
   const [progressPercent, setProgressPercent] = useState(0);
@@ -68,12 +96,13 @@ export default function FormUploadView({
   const [successInfo, setSuccessInfo] = useState<{ count: number; name: string }>({ count: 1, name: '' });
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Load Master Data
+  // Load Master Data & Existing Archives
   useEffect(() => {
     const sList = getStoredMasterSiswa();
     const gList = getStoredMasterGuru();
     setMasterSiswa(sList);
     setMasterGuru(gList);
+    setStoredArsipList(getStoredArsip());
 
     const distinctTahun = Array.from(new Set(sList.map(s => s.tahun))).sort().reverse();
     setTahunList(distinctTahun);
@@ -82,6 +111,22 @@ export default function FormUploadView({
       setTahun(distinctTahun[0]);
     }
   }, []);
+
+  // Real-time Auto Duplicate Detection for Individual Mode
+  useEffect(() => {
+    if (modeUpload === 'individual' && namaSubjek.trim() && kategori.trim()) {
+      const result = checkDuplicateArsip({
+        kategoriUtama: jenisArsip,
+        subjek: namaSubjek,
+        kategori: kategori,
+        identitas: identitas,
+        tahun: tahun
+      });
+      setDuplicateCheck(result);
+    } else {
+      setDuplicateCheck({ isDuplicate: false });
+    }
+  }, [modeUpload, namaSubjek, kategori, jenisArsip, identitas, tahun, storedArsipList]);
 
   // Update dynamic categories based on active type
   const activeKategoriList = 
@@ -174,12 +219,162 @@ export default function FormUploadView({
     }
   };
 
+  const startIndividualUpload = (replaceExistingId?: string) => {
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    setProgressPercent(20);
+    setProgressStatus(replaceExistingId ? 'Memperbarui dokumen arsip...' : 'Membaca & memverifikasi dokumen...');
+
+    const timer1 = setTimeout(() => {
+      setProgressPercent(60);
+      setProgressStatus(replaceExistingId ? 'Menimpa berkas di Google Drive E-Arsip...' : 'Mengunggah ke folder Google Drive E-Arsip...');
+    }, 400);
+
+    const timer2 = setTimeout(() => {
+      setProgressPercent(90);
+      setProgressStatus('Mencatat riwayat ke database spreadsheet...');
+    }, 700);
+
+    const timer3 = setTimeout(() => {
+      setProgressPercent(100);
+      setProgressStatus(replaceExistingId ? 'Berkas berhasil diperbarui!' : 'Pengarsipan selesai!');
+
+      const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      const newId = replaceExistingId || `${prefix}-${randomNum}`;
+      const todayStr = new Date().toLocaleDateString('id-ID');
+
+      const updatedArsip: ArsipItem = {
+        id: newId,
+        tanggal: todayStr,
+        tahun: tahun || new Date().getFullYear().toString(),
+        identitas: identitas || '-',
+        subjek: namaSubjek,
+        kategori: kategori,
+        kategoriUtama: jenisArsip,
+        namaFileAsli: selectedFile.name,
+        ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
+        linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+        uploader: 'admin@alhicam.sch.id',
+        fileDataUrl: fileBase64
+      };
+
+      if (replaceExistingId) {
+        replaceArsipItem(replaceExistingId, updatedArsip);
+      } else {
+        saveArsipItem(updatedArsip);
+      }
+
+      setStoredArsipList(getStoredArsip());
+      setIsUploading(false);
+      playSuccessSound();
+      setSuccessInfo({ 
+        count: 1, 
+        name: replaceExistingId ? `${namaSubjek} (${kategori} Diperbarui)` : namaSubjek 
+      });
+      setShowSuccessModal(true);
+      setShowDuplicateModal(false);
+
+      // Reset
+      setSelectedFile(null);
+      setFileBase64('');
+      setNamaDokumen('');
+      setDuplicateCheck({ isDuplicate: false });
+    }, 1100);
+  };
+
+  const startKolektifUpload = (replaceDuplicates: boolean = false) => {
+    const count = Object.keys(kolektifFiles).length;
+    if (count === 0) {
+      setErrorMessage('Pilih minimal 1 berkas pada daftar kategori untuk upload kolektif.');
+      return;
+    }
+
+    setIsUploading(true);
+    setProgressPercent(15);
+    setProgressStatus(`Mempersiapkan pengunggahan ${count} berkas...`);
+
+    let currentStep = 0;
+    const categories = Object.keys(kolektifFiles);
+
+    const interval = setInterval(() => {
+      currentStep++;
+      const percent = Math.min(95, Math.round((currentStep / count) * 90));
+      setProgressPercent(percent);
+      setProgressStatus(`Mengunggah berkas (${currentStep}/${count}): ${categories[currentStep - 1] || 'Selesai'}...`);
+
+      if (currentStep >= count) {
+        clearInterval(interval);
+
+        setTimeout(() => {
+          setProgressPercent(100);
+          setProgressStatus('Semua berkas kolektif berhasil disimpan!');
+
+          const todayStr = new Date().toLocaleDateString('id-ID');
+          const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
+          const currentArsip = getStoredArsip();
+
+          categories.forEach((katKey, idx) => {
+            const fileObj = kolektifFiles[katKey];
+            const existing = currentArsip.find(it => 
+              it.kategoriUtama === jenisArsip &&
+              it.subjek.trim().toLowerCase() === namaSubjek.trim().toLowerCase() &&
+              it.kategori.trim().toLowerCase() === katKey.trim().toLowerCase()
+            );
+
+            const randomNum = Math.floor(1000 + Math.random() * 9000) + idx;
+            const newId = (replaceDuplicates && existing) ? existing.id : `${prefix}-${randomNum}`;
+
+            const itemToSave: ArsipItem = {
+              id: newId,
+              tanggal: todayStr,
+              tahun: tahun || new Date().getFullYear().toString(),
+              identitas: identitas || '-',
+              subjek: namaSubjek,
+              kategori: katKey,
+              kategoriUtama: jenisArsip,
+              namaFileAsli: fileObj.file.name,
+              ukuran: `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`,
+              linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+              uploader: 'admin@alhicam.sch.id',
+              fileDataUrl: fileObj.base64
+            };
+
+            if (replaceDuplicates && existing) {
+              replaceArsipItem(existing.id, itemToSave);
+            } else {
+              saveArsipItem(itemToSave);
+            }
+          });
+
+          setStoredArsipList(getStoredArsip());
+          setIsUploading(false);
+          playSuccessSound();
+          setSuccessInfo({ count, name: namaSubjek });
+          setShowSuccessModal(true);
+          setShowKolektifDuplicateModal(false);
+
+          // Reset
+          setKolektifFiles({});
+          setNamaDokumen('');
+        }, 300);
+      }
+    }, 250);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
     if (!namaSubjek.trim()) {
-      setErrorMessage('Mohon pilih nama siswa/guru atau instansi terlebih dahulu.');
+      setErrorMessage(
+        jenisArsip === 'Arsip Siswa'
+          ? 'Mohon pilih nama siswa/alumni terlebih dahulu.'
+          : jenisArsip === 'Arsip Guru'
+          ? 'Mohon pilih nama guru/tendik terlebih dahulu.'
+          : 'Mohon isi nama instansi / perihal dokumen terlebih dahulu.'
+      );
       return;
     }
 
@@ -189,61 +384,22 @@ export default function FormUploadView({
         return;
       }
 
-      setIsUploading(true);
-      setProgressPercent(20);
-      setProgressStatus('Membaca & memverifikasi dokumen...');
+      // Auto-Detect Duplicate Check
+      const dup = checkDuplicateArsip({
+        kategoriUtama: jenisArsip,
+        subjek: namaSubjek,
+        kategori: kategori,
+        identitas: identitas,
+        tahun: tahun
+      });
 
-      const timer1 = setTimeout(() => {
-        setProgressPercent(60);
-        setProgressStatus('Mengunggah ke folder Google Drive E-Arsip...');
-      }, 500);
+      if (dup.isDuplicate && dup.existingItem) {
+        setDuplicateCheck(dup);
+        setShowDuplicateModal(true);
+        return;
+      }
 
-      const timer2 = setTimeout(() => {
-        setProgressPercent(90);
-        setProgressStatus('Mencatat riwayat ke database spreadsheet...');
-      }, 900);
-
-      const timer3 = setTimeout(() => {
-        setProgressPercent(100);
-        setProgressStatus('Pengarsipan selesai!');
-
-        const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        const newId = `${prefix}-${randomNum}`;
-        const todayStr = new Date().toLocaleDateString('id-ID');
-
-        const newArsip: ArsipItem = {
-          id: newId,
-          tanggal: todayStr,
-          tahun: tahun || new Date().getFullYear().toString(),
-          identitas: identitas || '-',
-          subjek: namaSubjek,
-          kategori: kategori,
-          kategoriUtama: jenisArsip,
-          namaFileAsli: selectedFile.name,
-          ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
-          linkDrive: `https://drive.google.com/file/d/${newId}/view`,
-          uploader: 'admin@alhicam.sch.id',
-          fileDataUrl: fileBase64
-        };
-
-        saveArsipItem(newArsip);
-        setIsUploading(false);
-        playSuccessSound();
-        setSuccessInfo({ count: 1, name: namaSubjek });
-        setShowSuccessModal(true);
-
-        // Reset
-        setSelectedFile(null);
-        setFileBase64('');
-        setNamaDokumen('');
-      }, 1400);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        clearTimeout(timer3);
-      };
+      startIndividualUpload();
     } else {
       // Mode Kolektif
       const count = Object.keys(kolektifFiles).length;
@@ -252,58 +408,25 @@ export default function FormUploadView({
         return;
       }
 
-      setIsUploading(true);
-      setProgressPercent(15);
-      setProgressStatus(`Mempersiapkan pengunggahan ${count} berkas...`);
+      // Check if any files in kolektif are duplicates
+      const dupesInKolektif: { kat: string; existing: ArsipItem }[] = [];
+      const currentArsip = getStoredArsip();
+      Object.keys(kolektifFiles).forEach(kat => {
+        const found = currentArsip.find(it => 
+          it.kategoriUtama === jenisArsip &&
+          it.subjek.trim().toLowerCase() === namaSubjek.trim().toLowerCase() &&
+          it.kategori.trim().toLowerCase() === kat.trim().toLowerCase()
+        );
+        if (found) dupesInKolektif.push({ kat, existing: found });
+      });
 
-      let currentStep = 0;
-      const categories = Object.keys(kolektifFiles);
+      if (dupesInKolektif.length > 0) {
+        setKolektifDuplicates(dupesInKolektif);
+        setShowKolektifDuplicateModal(true);
+        return;
+      }
 
-      const interval = setInterval(() => {
-        currentStep++;
-        const percent = Math.min(95, Math.round((currentStep / count) * 90));
-        setProgressPercent(percent);
-        setProgressStatus(`Mengunggah berkas (${currentStep}/${count}): ${categories[currentStep - 1] || 'Selesai'}...`);
-
-        if (currentStep >= count) {
-          clearInterval(interval);
-
-          setTimeout(() => {
-            setProgressPercent(100);
-            setProgressStatus('Semua berkas kolektif berhasil disimpan!');
-
-            const todayStr = new Date().toLocaleDateString('id-ID');
-            const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
-
-            categories.forEach((katKey, idx) => {
-              const fileObj = kolektifFiles[katKey];
-              const randomNum = Math.floor(1000 + Math.random() * 9000) + idx;
-              const newId = `${prefix}-${randomNum}`;
-
-              saveArsipItem({
-                id: newId,
-                tanggal: todayStr,
-                tahun: tahun || new Date().getFullYear().toString(),
-                identitas: identitas || '-',
-                subjek: namaSubjek,
-                kategori: katKey,
-                kategoriUtama: jenisArsip,
-                namaFileAsli: fileObj.file.name,
-                ukuran: `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`,
-                linkDrive: `https://drive.google.com/file/d/${newId}/view`,
-                uploader: 'admin@alhicam.sch.id',
-                fileDataUrl: fileObj.base64
-              });
-            });
-
-            setIsUploading(false);
-            playSuccessSound();
-            setSuccessInfo({ count, name: namaSubjek });
-            setShowSuccessModal(true);
-            setKolektifFiles({});
-          }, 400);
-        }
-      }, 350);
+      startKolektifUpload(false);
     }
   };
 
@@ -311,16 +434,26 @@ export default function FormUploadView({
     <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/90 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 mb-5 border-b border-slate-100">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <CloudUpload className="w-5 h-5" />
-            </div>
-            <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold flex-shrink-0">
+            <CloudUpload className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Unggah Berkas Baru</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500">Pilih subjek dan lampirkan dokumen digital</p>
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs">
+                <span>{jenisArsip === 'Arsip Siswa' ? '🎓' : jenisArsip === 'Arsip Guru' ? '👨‍🏫' : '📁'}</span>
+                <span>{jenisArsip}</span>
+              </span>
             </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              {jenisArsip === 'Arsip Siswa' 
+                ? 'Lampirkan Ijazah, SKL, SPMB, atau berkas kelulusan siswa & alumni'
+                : jenisArsip === 'Arsip Guru'
+                ? 'Lampirkan KTP, KK, Ijazah S1/S2, Serdik, atau dokumen kepegawaian guru'
+                : 'Lampirkan Surat Masuk, Surat Keluar, Proposal, LPJ, atau berkas instansi'}
+            </p>
           </div>
         </div>
 
@@ -350,32 +483,6 @@ export default function FormUploadView({
             <Layers className="w-3.5 h-3.5" />
             <span>Upload Kolektif</span>
           </button>
-        </div>
-      </div>
-
-      {/* Target Category Swipeable Pills */}
-      <div className="mb-5">
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Pilih Kelompok Berkas:</span>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {(['Arsip Siswa', 'Arsip Guru', 'Arsip Lainnya'] as const).map(j => (
-            <button
-              key={j}
-              type="button"
-              onClick={() => {
-                setJenisArsip(j);
-                setNamaSubjek('');
-                setIdentitas('');
-              }}
-              className={`px-4 py-2 rounded-2xl text-xs font-semibold border transition-all flex-shrink-0 cursor-pointer ${
-                jenisArsip === j
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
-                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              {j === 'Arsip Siswa' ? '🎓 ' : j === 'Arsip Guru' ? '👨‍🏫 ' : '📁 '}
-              {j}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -532,6 +639,30 @@ export default function FormUploadView({
               </div>
             </div>
 
+            {/* Auto-Detect Real-time Duplicate Banner */}
+            {duplicateCheck.isDuplicate && duplicateCheck.existingItem && (
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 flex items-start gap-3 animate-fadeIn shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="flex-1 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-amber-900 text-xs sm:text-sm">Auto-Detect: Berkas Sudah Pernah Diunggah!</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-[10px] font-bold text-amber-800">
+                      Duplikat Terdeteksi
+                    </span>
+                  </div>
+                  <p className="mt-1 text-amber-800 leading-relaxed text-[11px] sm:text-xs">
+                    Dokumen <strong>{duplicateCheck.existingItem.kategori}</strong> untuk <strong>{duplicateCheck.existingItem.subjek}</strong> sudah ada di database sejak <strong>{duplicateCheck.existingItem.tanggal}</strong> (File: <em>{duplicateCheck.existingItem.namaFileAsli}</em>).
+                  </p>
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700">
+                    <History className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Saat tombol simpan diklik, sistem akan memberi pilihan untuk <strong>menimpa (replace)</strong> atau <strong>membatalkan</strong>.</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Nama / Judul Dokumen */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -628,6 +759,13 @@ export default function FormUploadView({
             <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
               {activeKategoriList.map((kat, idx) => {
                 const isAttached = !!kolektifFiles[kat];
+                const existingInDb = storedArsipList.find(it => 
+                  it.kategoriUtama === jenisArsip &&
+                  namaSubjek.trim() &&
+                  it.subjek.trim().toLowerCase() === namaSubjek.trim().toLowerCase() &&
+                  it.kategori.trim().toLowerCase() === kat.trim().toLowerCase()
+                );
+
                 return (
                   <div 
                     key={kat} 
@@ -636,11 +774,21 @@ export default function FormUploadView({
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-slate-900 block truncate">{kat}</span>
                         {isAttached && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
                             Siap
+                          </span>
+                        )}
+                        {existingInDb && !isAttached && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            Sudah ada ({existingInDb.tanggal})
+                          </span>
+                        )}
+                        {existingInDb && isAttached && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            ⚠️ Akan menimpa berkas lama
                           </span>
                         )}
                       </div>
@@ -656,7 +804,7 @@ export default function FormUploadView({
                     <div className="flex-shrink-0">
                       {isAttached ? (
                         <div className="flex items-center gap-1">
-                          <label className="p-2 bg-amber-100 text-amber-800 rounded-xl text-xs font-semibold cursor-pointer">
+                          <label className="p-2 bg-amber-100 text-amber-800 rounded-xl text-xs font-semibold cursor-pointer" title="Ganti Berkas">
                             <RefreshCw className="w-3.5 h-3.5" />
                             <input
                               type="file"
@@ -668,6 +816,7 @@ export default function FormUploadView({
                             type="button"
                             onClick={() => removeKolektifFile(kat)}
                             className="p-2 bg-red-100 text-red-600 rounded-xl"
+                            title="Hapus Berkas"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -731,6 +880,134 @@ export default function FormUploadView({
           </button>
         </div>
       </form>
+
+      {/* Auto-Detect Duplicate Confirmation Modal (Individual Mode) */}
+      {showDuplicateModal && duplicateCheck.existingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl animate-scaleUp border border-amber-200">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3.5 shadow-md shadow-amber-500/20">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div className="text-center mb-5">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] uppercase tracking-wider inline-block mb-1.5">
+                Auto-Detect E-Arsip Al-Hicam
+              </span>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                Berkas Dokumen Sudah Ada!
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                Sistem mendeteksi bahwa berkas <strong>{duplicateCheck.existingItem.kategori}</strong> untuk <strong>{duplicateCheck.existingItem.subjek}</strong> sudah pernah tersimpan di sistem.
+              </p>
+            </div>
+
+            {/* Comparison Box */}
+            <div className="space-y-2.5 mb-5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
+              <div className="flex items-start gap-2.5 pb-2.5 border-b border-slate-200">
+                <History className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Berkas Lama di Database:</span>
+                  <strong className="text-slate-800 block truncate">{duplicateCheck.existingItem.namaFileAsli}</strong>
+                  <span className="text-slate-500 text-[11px]">Diunggah pada {duplicateCheck.existingItem.tanggal} • Ukuran: {duplicateCheck.existingItem.ukuran}</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 pt-0.5">
+                <Upload className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-bold text-blue-600 block">Berkas Baru yang Dipilih:</span>
+                  <strong className="text-slate-800 block truncate">{selectedFile?.name}</strong>
+                  <span className="text-slate-500 text-[11px]">Ukuran: {((selectedFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3 Action Buttons */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => startIndividualUpload(duplicateCheck.existingItem?.id)}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Ganti / Timpa Berkas Lama (Replace)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => startIndividualUpload()}
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-2xl transition-colors cursor-pointer"
+              >
+                Tetap Simpan Sebagai Versi Tambahan
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDuplicateModal(false)}
+                className="w-full py-2 px-4 border border-slate-200 hover:bg-slate-50 text-slate-500 font-medium text-xs rounded-2xl transition-colors cursor-pointer"
+              >
+                Batalkan Unggahan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Detect Duplicate Confirmation Modal (Kolektif Mode) */}
+      {showKolektifDuplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl animate-scaleUp border border-amber-200">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3.5 shadow-md shadow-amber-500/20">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div className="text-center mb-4">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                Beberapa Berkas Kolektif Sudah Ada!
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                Terdapat <strong>{kolektifDuplicates.length} berkas</strong> milik <strong>{namaSubjek}</strong> yang sebelumnya sudah tercatat di sistem:
+              </p>
+            </div>
+
+            <div className="max-h-40 overflow-y-auto space-y-1.5 mb-5 bg-amber-50/60 p-3 rounded-2xl border border-amber-200">
+              {kolektifDuplicates.map((item, idx) => (
+                <div key={idx} className="text-xs text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold">• {item.kat}</span>
+                  <span className="text-[10px] text-slate-500">Ada sejak {item.existing.tanggal}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => startKolektifUpload(true)}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Timpa & Perbarui Berkas yang Ada</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => startKolektifUpload(false)}
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-2xl transition-colors cursor-pointer"
+              >
+                Simpan Semua Sebagai Versi Tambahan
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowKolektifDuplicateModal(false)}
+                className="w-full py-2 px-4 border border-slate-200 hover:bg-slate-50 text-slate-500 font-medium text-xs rounded-2xl transition-colors cursor-pointer"
+              >
+                Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Modal */}
       {showSuccessModal && (

@@ -18,19 +18,55 @@ import {
   Database,
   ExternalLink,
   Sparkles,
-  FileText
+  FileText,
+  BookOpen,
+  Stamp,
+  History
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
 import FormUploadView from './components/FormUploadView';
 import FormUnduhView from './components/FormUnduhView';
 import RekapArsipView from './components/RekapArsipView';
+import BukuIndukView from './components/BukuIndukView';
+import LegalisirView from './components/LegalisirView';
+import AuditLogView from './components/AuditLogView';
 import LaporanView from './components/LaporanView';
 import PreviewModal from './components/PreviewModal';
 import { ArsipItem, DB_KEYS } from './data/mockDatabase';
 
-type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'laporan';
+type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
 type SubKategori = 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
+
+// Isolated live clock component so ticking every second doesn't re-render entire page/charts
+function LiveClock() {
+  const [timeStr, setTimeStr] = useState('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+      const dayName = days[now.getDay()];
+      const date = now.getDate();
+      const monthName = months[now.getMonth()];
+      const year = now.getFullYear();
+
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+
+      setTimeStr(`${dayName}, ${date} ${monthName} ${year} | ${hours}:${minutes}:${seconds} WIB`);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span>{timeStr || 'Memuat waktu...'}</span>;
+}
 
 export default function App() {
   // Auth state
@@ -64,32 +100,6 @@ export default function App() {
   const [showSettingModal, setShowSettingModal] = useState(false);
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
 
-  // Live Clock (WIB)
-  const [clockString, setClockString] = useState('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
-      const dayName = days[now.getDay()];
-      const date = now.getDate();
-      const monthName = months[now.getMonth()];
-      const year = now.getFullYear();
-
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-
-      setClockString(`${dayName}, ${date} ${monthName} ${year} | ${hours}:${minutes}:${seconds} WIB`);
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const handleLoginSuccess = (user: { email: string; name: string; role: string }) => {
     setCurrentUser(user);
     localStorage.setItem(DB_KEYS.AUTH_USER, JSON.stringify(user));
@@ -113,6 +123,9 @@ export default function App() {
     upload: `Upload Dokumen (${activeSubKategori})`,
     unduh: `Unduh Dokumen (${activeSubKategori})`,
     rekap: 'Matriks Rekap Kelengkapan Berkas',
+    'buku-induk': 'Buku Induk Digital (Siswa & Guru)',
+    legalisir: 'Verifikasi & Legalisir Digital',
+    'audit-log': 'Log & Jejak Audit Pengarsipan',
     laporan: 'Statistik & Laporan Arsip'
   };
 
@@ -270,6 +283,54 @@ export default function App() {
             <span>Rekap Arsip</span>
           </button>
 
+          {/* Buku Induk Digital (Siswa & Guru) */}
+          <button
+            onClick={() => {
+              setActivePage('buku-induk');
+              setMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+              activePage === 'buku-induk'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Buku Induk Digital</span>
+          </button>
+
+          {/* Verifikasi & Legalisir */}
+          <button
+            onClick={() => {
+              setActivePage('legalisir');
+              setMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+              activePage === 'legalisir'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
+          >
+            <Stamp className="w-4 h-4" />
+            <span>Verifikasi & Legalisir</span>
+          </button>
+
+          {/* Log Aktivitas & Audit */}
+          <button
+            onClick={() => {
+              setActivePage('audit-log');
+              setMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+              activePage === 'audit-log'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Log Aktivitas & Audit</span>
+          </button>
+
           {/* Divider */}
           <div className="pt-4 pb-1 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
             MANAJEMEN & LAPORAN
@@ -344,7 +405,7 @@ export default function App() {
               </h1>
               <p className="text-[11px] text-slate-300 font-mono flex items-center gap-1.5 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                <span>{clockString || 'Memuat waktu...'}</span>
+                <LiveClock />
               </p>
             </div>
           </div>
@@ -480,6 +541,23 @@ export default function App() {
             <RekapArsipView
               onPreview={(item) => setPreviewItem(item)}
             />
+          )}
+
+          {activePage === 'buku-induk' && (
+            <BukuIndukView
+              onNavigateToArsip={(sub, nama) => {
+                setActivePage('unduh');
+                setActiveSubKategori(sub);
+              }}
+            />
+          )}
+
+          {activePage === 'legalisir' && (
+            <LegalisirView />
+          )}
+
+          {activePage === 'audit-log' && (
+            <AuditLogView />
           )}
 
           {activePage === 'laporan' && (

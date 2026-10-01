@@ -448,3 +448,361 @@ export function saveArsipItem(item: ArsipItem): ArsipItem[] {
   // Return list with enriched item for immediate UI update
   return [item, ...current];
 }
+
+export interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  existingItem?: ArsipItem;
+  reason?: string;
+}
+
+/**
+ * Auto-detect duplicate archive records across Siswa, Guru, and Lainnya.
+ */
+export function checkDuplicateArsip(params: {
+  kategoriUtama: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
+  subjek: string;
+  kategori: string;
+  identitas?: string;
+  tahun?: string;
+}): DuplicateCheckResult {
+  const current = getStoredArsip();
+  const subjekNorm = (params.subjek || '').trim().toLowerCase();
+  const kategoriNorm = (params.kategori || '').trim().toLowerCase();
+  const identitasNorm = (params.identitas || '').trim().toLowerCase();
+
+  if (!subjekNorm || !kategoriNorm) {
+    return { isDuplicate: false };
+  }
+
+  const found = current.find(item => {
+    if (item.kategoriUtama !== params.kategoriUtama) return false;
+
+    // Check if category matches
+    const sameCategory = item.kategori.trim().toLowerCase() === kategoriNorm;
+    if (!sameCategory) return false;
+
+    // For Siswa: match by name or by NISN
+    if (params.kategoriUtama === 'Arsip Siswa') {
+      const matchName = item.subjek.trim().toLowerCase() === subjekNorm;
+      const matchNisn = identitasNorm && identitasNorm !== '-' && item.identitas.trim().toLowerCase() === identitasNorm;
+      return matchName || matchNisn;
+    }
+
+    // For Guru: match by name or by NUPTK
+    if (params.kategoriUtama === 'Arsip Guru') {
+      const matchName = item.subjek.trim().toLowerCase() === subjekNorm;
+      const matchNuptk = identitasNorm && identitasNorm !== '-' && item.identitas.trim().toLowerCase() === identitasNorm;
+      return matchName || matchNuptk;
+    }
+
+    // For Lainnya: match by subject/document perihal & category
+    if (params.kategoriUtama === 'Arsip Lainnya') {
+      const matchSubject = item.subjek.trim().toLowerCase() === subjekNorm;
+      const matchIdentitas = identitasNorm && identitasNorm !== '-' && item.identitas.trim().toLowerCase() === identitasNorm;
+      return matchSubject || matchIdentitas;
+    }
+
+    return false;
+  });
+
+  if (found) {
+    return {
+      isDuplicate: true,
+      existingItem: found,
+      reason: `Berkas "${found.kategori}" untuk "${found.subjek}" sudah pernah diunggah pada ${found.tanggal} (ID: ${found.id}).`
+    };
+  }
+
+  return { isDuplicate: false };
+}
+
+/**
+ * Replace an existing archive document with updated file and metadata (Anti-duplication replace)
+ */
+export function replaceArsipItem(existingId: string, newItem: ArsipItem): ArsipItem[] {
+  // If item has file attachment, store safely
+  if (newItem.fileDataUrl) {
+    fileBlobCache.set(newItem.id, newItem.fileDataUrl);
+    saveFileAttachment(newItem.id, newItem.fileDataUrl);
+  }
+
+  const current = getStoredArsip();
+  const cleanItemForStorage: ArsipItem = { ...newItem };
+  delete cleanItemForStorage.fileDataUrl;
+
+  const updatedClean = current.map(item => {
+    if (item.id === existingId) {
+      return cleanItemForStorage;
+    }
+    const copy = { ...item };
+    delete copy.fileDataUrl;
+    return copy;
+  });
+
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
+  return current.map(item => item.id === existingId ? newItem : item);
+}
+
+// =====================================================================
+// MASTER DATA MANAGEMENT (BUKU INDUK)
+// =====================================================================
+
+export function saveMasterSiswa(item: MasterSiswaItem): MasterSiswaItem[] {
+  const current = getStoredMasterSiswa();
+  const index = current.findIndex(s => s.id === item.id || (s.nisn && s.nisn === item.nisn));
+  let updated: MasterSiswaItem[];
+  if (index >= 0) {
+    updated = [...current];
+    updated[index] = item;
+  } else {
+    updated = [item, ...current];
+  }
+  safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(updated));
+  addAuditLog({
+    aksi: 'UPDATE',
+    kategori: 'Buku Induk Siswa',
+    subjek: item.nama,
+    detail: `Pembaruan data siswa NISN: ${item.nisn} (Kelas ${item.kelas}, Angkatan ${item.tahun})`,
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  });
+  return updated;
+}
+
+export function deleteMasterSiswa(id: string): MasterSiswaItem[] {
+  const current = getStoredMasterSiswa();
+  const target = current.find(s => s.id === id);
+  const updated = current.filter(s => s.id !== id);
+  safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(updated));
+  if (target) {
+    addAuditLog({
+      aksi: 'DELETE',
+      kategori: 'Buku Induk Siswa',
+      subjek: target.nama,
+      detail: `Penghapusan master data siswa ${target.nama} (${target.nisn})`,
+      operator: 'admin@alhicam.sch.id',
+      status: 'WARNING'
+    });
+  }
+  return updated;
+}
+
+export function saveMasterGuru(item: MasterGuruItem): MasterGuruItem[] {
+  const current = getStoredMasterGuru();
+  const index = current.findIndex(g => g.id === item.id || (g.nuptk && g.nuptk === item.nuptk));
+  let updated: MasterGuruItem[];
+  if (index >= 0) {
+    updated = [...current];
+    updated[index] = item;
+  } else {
+    updated = [item, ...current];
+  }
+  safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(updated));
+  addAuditLog({
+    aksi: 'UPDATE',
+    kategori: 'Direktori Pendidik',
+    subjek: item.nama,
+    detail: `Pembaruan data guru NUPTK: ${item.nuptk} (${item.jabatan})`,
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  });
+  return updated;
+}
+
+export function deleteMasterGuru(id: string): MasterGuruItem[] {
+  const current = getStoredMasterGuru();
+  const target = current.find(g => g.id === id);
+  const updated = current.filter(g => g.id !== id);
+  safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(updated));
+  if (target) {
+    addAuditLog({
+      aksi: 'DELETE',
+      kategori: 'Direktori Pendidik',
+      subjek: target.nama,
+      detail: `Penghapusan data guru ${target.nama}`,
+      operator: 'admin@alhicam.sch.id',
+      status: 'WARNING'
+    });
+  }
+  return updated;
+}
+
+// =====================================================================
+// AUDIT LOG & JEJAK AKTIVITAS
+// =====================================================================
+
+export interface AuditLogItem {
+  id: string;
+  waktu: string;
+  aksi: 'UPLOAD' | 'UPDATE' | 'UNDUH' | 'PREVIEW' | 'DELETE' | 'LEGALISIR';
+  kategori: string;
+  subjek: string;
+  detail: string;
+  operator: string;
+  status: 'SUCCESS' | 'WARNING';
+}
+
+export const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
+  {
+    id: 'LOG-1001',
+    waktu: '01/10/2026 15:42:10',
+    aksi: 'UPLOAD',
+    kategori: 'Arsip Siswa',
+    subjek: 'Andika Pratama',
+    detail: 'Pengunggahan berkas Ijazah SMP Kelulusan 2024 ke Google Drive',
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'LOG-1002',
+    waktu: '01/10/2026 14:15:32',
+    aksi: 'LEGALISIR',
+    kategori: 'Legalisir Digital',
+    subjek: 'Budi Santoso',
+    detail: 'Penerbitan QR Code & Stempel Legalisir Resmi Ijazah SMP (Reg: LEG-2026-0042)',
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'LOG-1003',
+    waktu: '30/09/2026 11:20:05',
+    aksi: 'UPDATE',
+    kategori: 'Arsip Guru',
+    subjek: 'Drs. H. Solikhin, M.Pd',
+    detail: 'Pembaruan (replace) dokumen Sertifikat Pendidik (Serdik)',
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'LOG-1004',
+    waktu: '29/09/2026 09:30:18',
+    aksi: 'UNDUH',
+    kategori: 'Arsip Siswa',
+    subjek: 'Citra Dewi Permata',
+    detail: 'Unduh berkas Berkas SPMB format PDF',
+    operator: 'solikhin@alhicam.sch.id',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'LOG-1005',
+    waktu: '28/09/2026 16:04:45',
+    aksi: 'UPLOAD',
+    kategori: 'Arsip Lainnya',
+    subjek: 'Dinas Pendidikan Kab. Jombang',
+    detail: 'Pengarsipan Surat Masuk Edaran Asesmen Nasional',
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  }
+];
+
+export const DB_AUDIT_KEY = 'EARSIP_AUDIT_LOGS';
+
+export function getStoredAuditLogs(): AuditLogItem[] {
+  try {
+    const raw = localStorage.getItem(DB_AUDIT_KEY);
+    if (!raw) {
+      safeSetItem(DB_AUDIT_KEY, JSON.stringify(INITIAL_AUDIT_LOGS));
+      return INITIAL_AUDIT_LOGS;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return INITIAL_AUDIT_LOGS;
+  }
+}
+
+export function addAuditLog(log: Omit<AuditLogItem, 'id' | 'waktu'>): AuditLogItem[] {
+  const current = getStoredAuditLogs();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('id-ID');
+  const timeStr = now.toLocaleTimeString('id-ID');
+  const newLog: AuditLogItem = {
+    ...log,
+    id: `LOG-${Math.floor(1000 + Math.random() * 9000)}`,
+    waktu: `${dateStr} ${timeStr}`
+  };
+  const updated = [newLog, ...current.slice(0, 100)];
+  safeSetItem(DB_AUDIT_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+// =====================================================================
+// LEGALISIR & VERIFIKASI KEABSAHAN IJAZAH
+// =====================================================================
+
+export interface LegalisirRecord {
+  id: string;
+  nomorRegistrasi: string;
+  tanggalPengesahan: string;
+  namaAlumni: string;
+  nisn: string;
+  tahunLulus: string;
+  jenisDokumen: string;
+  nomorSeriIjazah: string;
+  statusKeaslian: 'ASLI_TERVERIFIKASI' | 'PERLU_KONFIRMASI';
+  pejabatPengesah: string;
+  jabatanPengesah: string;
+  qrCodeToken: string;
+}
+
+export const INITIAL_LEGALISIR: LegalisirRecord[] = [
+  {
+    id: 'LEG-01',
+    nomorRegistrasi: 'LEG/2026/SMP-AH/001',
+    tanggalPengesahan: '28/09/2026',
+    namaAlumni: 'Andika Pratama',
+    nisn: '0071829301',
+    tahunLulus: '2024',
+    jenisDokumen: 'Ijazah SMP',
+    nomorSeriIjazah: 'DN-05/DIK/2024/004912',
+    statusKeaslian: 'ASLI_TERVERIFIKASI',
+    pejabatPengesah: 'Drs. H. Solikhin, M.Pd',
+    jabatanPengesah: 'Kepala Sekolah SMP Al-Hikam',
+    qrCodeToken: 'VERIF-AH-2024-001-ANDIKA'
+  },
+  {
+    id: 'LEG-02',
+    nomorRegistrasi: 'LEG/2026/SMP-AH/002',
+    tanggalPengesahan: '25/09/2026',
+    namaAlumni: 'Budi Santoso',
+    nisn: '0062819203',
+    tahunLulus: '2023',
+    jenisDokumen: 'Surat Keterangan Lulus (SKL)',
+    nomorSeriIjazah: 'SKL/SMP-AH/VI/2023/118',
+    statusKeaslian: 'ASLI_TERVERIFIKASI',
+    pejabatPengesah: 'Drs. H. Solikhin, M.Pd',
+    jabatanPengesah: 'Kepala Sekolah SMP Al-Hikam',
+    qrCodeToken: 'VERIF-AH-2023-002-BUDI'
+  }
+];
+
+export const DB_LEGALISIR_KEY = 'EARSIP_LEGALISIR';
+
+export function getStoredLegalisir(): LegalisirRecord[] {
+  try {
+    const raw = localStorage.getItem(DB_LEGALISIR_KEY);
+    if (!raw) {
+      safeSetItem(DB_LEGALISIR_KEY, JSON.stringify(INITIAL_LEGALISIR));
+      return INITIAL_LEGALISIR;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return INITIAL_LEGALISIR;
+  }
+}
+
+export function saveLegalisirRecord(record: LegalisirRecord): LegalisirRecord[] {
+  const current = getStoredLegalisir();
+  const updated = [record, ...current];
+  safeSetItem(DB_LEGALISIR_KEY, JSON.stringify(updated));
+  addAuditLog({
+    aksi: 'LEGALISIR',
+    kategori: 'Legalisir Digital',
+    subjek: record.namaAlumni,
+    detail: `Penerbitan legalisir ${record.jenisDokumen} No: ${record.nomorRegistrasi}`,
+    operator: 'admin@alhicam.sch.id',
+    status: 'SUCCESS'
+  });
+  return updated;
+}
+
+

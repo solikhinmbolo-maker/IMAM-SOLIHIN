@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Lightbulb, 
   FolderOpen, 
@@ -45,8 +45,9 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [mobileChartTab, setMobileChartTab] = useState<'kategori' | 'siswa'>('kategori');
   const [mobileQuickSearch, setMobileQuickSearch] = useState('');
 
-  const allArsip = getStoredArsip();
-  const allSiswa = getStoredMasterSiswa();
+  // Memoize data so reference remains stable across parent re-renders
+  const allArsip = useMemo(() => getStoredArsip(), []);
+  const allSiswa = useMemo(() => getStoredMasterSiswa(), []);
 
   // Calculate Metrics
   const totalArsip = allArsip.length;
@@ -82,11 +83,17 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
 
   // Helper function to build Donut Chart
   const buildDonutChart = (canvas: HTMLCanvasElement, instanceRef: React.MutableRefObject<Chart | null>) => {
-    if (instanceRef.current) {
-      instanceRef.current.destroy();
-    }
     const labels = sortedCategories.slice(0, 6).map(e => e[0]);
     const data = sortedCategories.slice(0, 6).map(e => e[1]);
+
+    // If chart already exists, update data silently without re-running animations
+    if (instanceRef.current) {
+      instanceRef.current.data.labels = labels.length > 0 ? labels : ['Belum Ada'];
+      instanceRef.current.data.datasets[0].data = data.length > 0 ? data : [1];
+      instanceRef.current.data.datasets[0].backgroundColor = donutColors.slice(0, labels.length || 1);
+      instanceRef.current.update('none');
+      return;
+    }
 
     instanceRef.current = new Chart(canvas, {
       type: 'doughnut',
@@ -103,6 +110,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 350 },
         cutout: '70%',
         plugins: {
           legend: { display: false }
@@ -113,15 +121,21 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
 
   // Helper function to build Bar Chart
   const buildBarChart = (canvas: HTMLCanvasElement, instanceRef: React.MutableRefObject<Chart | null>) => {
-    if (instanceRef.current) {
-      instanceRef.current.destroy();
-    }
     const ctx = canvas.getContext('2d');
     let gradient: any = '#2563EB';
     if (ctx) {
       gradient = ctx.createLinearGradient(0, 0, 0, 220);
       gradient.addColorStop(0, 'rgba(37, 99, 235, 0.95)');
       gradient.addColorStop(1, 'rgba(37, 99, 235, 0.15)');
+    }
+
+    // If chart already exists, update data silently without re-running animations
+    if (instanceRef.current) {
+      instanceRef.current.data.labels = angkatanLabels.map(th => `Th ${th}`);
+      instanceRef.current.data.datasets[0].data = angkatanData;
+      instanceRef.current.data.datasets[0].backgroundColor = gradient;
+      instanceRef.current.update('none');
+      return;
     }
 
     instanceRef.current = new Chart(canvas, {
@@ -139,6 +153,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 350 },
         plugins: {
           legend: { display: false }
         },
@@ -174,12 +189,24 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
     }
 
     return () => {
-      if (mobileDonutChart.current) mobileDonutChart.current.destroy();
-      if (mobileBarChart.current) mobileBarChart.current.destroy();
-      if (desktopDonutChart.current) desktopDonutChart.current.destroy();
-      if (desktopBarChart.current) desktopBarChart.current.destroy();
+      if (mobileDonutChart.current) {
+        mobileDonutChart.current.destroy();
+        mobileDonutChart.current = null;
+      }
+      if (mobileBarChart.current) {
+        mobileBarChart.current.destroy();
+        mobileBarChart.current = null;
+      }
+      if (desktopDonutChart.current) {
+        desktopDonutChart.current.destroy();
+        desktopDonutChart.current = null;
+      }
+      if (desktopBarChart.current) {
+        desktopBarChart.current.destroy();
+        desktopBarChart.current = null;
+      }
     };
-  }, [allArsip, allSiswa, mobileChartTab]);
+  }, [mobileChartTab]);
 
   const handleMobileSearch = (e: React.FormEvent) => {
     e.preventDefault();
