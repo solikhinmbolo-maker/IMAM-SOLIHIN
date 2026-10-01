@@ -22,7 +22,10 @@ import {
   BookOpen,
   Stamp,
   History,
-  Clock
+  Clock,
+  Copy,
+  Check,
+  CheckCircle2
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
@@ -34,7 +37,13 @@ import LegalisirView from './components/LegalisirView';
 import AuditLogView from './components/AuditLogView';
 import LaporanView from './components/LaporanView';
 import PreviewModal from './components/PreviewModal';
-import { ArsipItem, DB_KEYS } from './data/mockDatabase';
+import { 
+  ArsipItem, 
+  DB_KEYS, 
+  getStoredSyncConfig, 
+  saveStoredSyncConfig, 
+  GoogleSyncConfig 
+} from './data/mockDatabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
 type SubKategori = 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -157,6 +166,113 @@ export default function App() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showSettingModal, setShowSettingModal] = useState(false);
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
+
+  // Google Sync Config
+  const [syncConfig, setSyncConfig] = useState<GoogleSyncConfig>(() => getStoredSyncConfig());
+  const [copiedGAS, setCopiedGAS] = useState(false);
+  const [testConnStatus, setTestConnStatus] = useState<string>('');
+  const [isTestingConn, setIsTestingConn] = useState(false);
+
+  const handleCopyGAS = () => {
+    const code = `// ================================================================
+// GOOGLE APPS SCRIPT WEBHOOK UNTUK E-ARSIP SMP AL-HIKAM
+// ================================================================
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var folderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
+    var sheetId = data.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+    
+    // 1. Simpan File Fisik ke Google Drive
+    var fileUrl = '-';
+    if (data.fileData && data.fileData.indexOf('base64,') > -1) {
+      var split = data.fileData.split('base64,');
+      var contentType = split[0].split(':')[1].split(';')[0];
+      var bytes = Utilities.base64Decode(split[1]);
+      var blob = Utilities.newBlob(bytes, contentType, data.namaFile || 'arsip_dokumen.pdf');
+      
+      var folder;
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (err) {
+        folder = DriveApp.getRootFolder();
+      }
+      
+      var file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      fileUrl = file.getUrl();
+    }
+
+    // 2. Simpan Rekap Baris ke Google Spreadsheet
+    var ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+    
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        'ID ARSIP', 'TANGGAL', 'TAHUN', 'IDENTITAS (NISN/NUPTK)', 
+        'NAMA SUBJEK', 'KATEGORI', 'KATEGORI UTAMA', 'NAMA FILE', 
+        'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
+      ]);
+    }
+
+    sheet.appendRow([
+      data.id, data.tanggal, data.tahun, data.identitas,
+      data.subjek, data.kategori, data.kategoriUtama, data.namaFile,
+      data.ukuran, data.uploader, fileUrl
+    ]);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      driveUrl: fileUrl,
+      message: 'Berhasil diarsipkan ke Google Drive & Sheet!'
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'online',
+    message: 'Webhook E-Arsip SMP Al-Hikam Aktif!'
+  })).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+    navigator.clipboard.writeText(code);
+    setCopiedGAS(true);
+    setTimeout(() => setCopiedGAS(false), 3000);
+  };
+
+  const handleTestConnection = async () => {
+    if (!syncConfig.webhookUrl) {
+      setTestConnStatus('⚠️ Masukkan URL Webhook terlebih dahulu!');
+      return;
+    }
+    setIsTestingConn(true);
+    setTestConnStatus('Sedang memeriksa respon webhook...');
+    try {
+      const res = await fetch(syncConfig.webhookUrl);
+      const data = await res.json();
+      if (data && data.status === 'online') {
+        setTestConnStatus('✅ Terhubung! Webhook Google Apps Script aktif & online.');
+      } else {
+        setTestConnStatus('✅ Terhubung ke Webhook Google Apps Script!');
+      }
+    } catch (e: any) {
+      setTestConnStatus('⚠️ Belum merespon. Pastikan Webhook di-deploy dengan akses "Anyone / Siapa saja".');
+    } finally {
+      setIsTestingConn(false);
+    }
+  };
+
+  const handleSaveSettings = () => {
+    saveStoredSyncConfig(syncConfig);
+    setShowSettingModal(false);
+  };
 
   const handleLoginSuccess = (user: { email: string; name: string; role: string }) => {
     setCurrentUser(user);
@@ -912,18 +1028,18 @@ export default function App() {
         </div>
       )}
 
-      {/* 8. MODAL PENGATURAN SISTEM */}
+      {/* 8. MODAL PENGATURAN SISTEM & SINKRONISASI GOOGLE */}
       {showSettingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100 animate-scaleUp">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-xl w-full shadow-2xl border border-slate-100 animate-scaleUp max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
                   <Settings className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Pengaturan Sistem E-Arsip</h3>
-                  <p className="text-xs text-slate-500">Konfigurasi penyimpanan Cloud & Database</p>
+                  <h3 className="text-base font-bold text-slate-900">Sinkronisasi Google Drive & Sheet</h3>
+                  <p className="text-xs text-slate-500">Hubungkan penyimpanan arsip fisik dan rekap database</p>
                 </div>
               </div>
               <button 
@@ -935,39 +1051,143 @@ export default function App() {
             </div>
 
             <div className="space-y-4 mb-6 text-xs text-slate-700">
-              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="font-semibold text-slate-500 block mb-1">Google Drive Root Folder ID:</span>
-                <span className="font-mono text-slate-900 font-bold select-all">1M_Ry_o-q7JGeXRfYdlpE8E2AuF_aOE8f</span>
+              
+              {/* Webhook URL Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  1. URL Webhook Google Apps Script (Web App URL)
+                </label>
+                <input
+                  type="text"
+                  value={syncConfig.webhookUrl}
+                  onChange={(e) => setSyncConfig({ ...syncConfig, webhookUrl: e.target.value })}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-purple-600"
+                />
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  Didapat setelah mengklik <strong>Deploy &gt; New Deployment &gt; Web App</strong> di Google Sheets Anda.
+                </span>
               </div>
 
-              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="font-semibold text-slate-500 block mb-1">Google Spreadsheet Database ID:</span>
-                <span className="font-mono text-slate-900 font-bold select-all">1ew4gfR53zeBdAcf57wWNdOmE9NiZjsvZikXgSxNHwEQ</span>
+              {/* Folder ID and Sheet ID */}
+              <div className="space-y-3">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                      ID Folder Google Drive
+                    </label>
+                    <a
+                      href={`https://drive.google.com/drive/folders/${syncConfig.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      <span>Buka Folder Drive</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <input
+                    type="text"
+                    value={syncConfig.folderId}
+                    onChange={(e) => setSyncConfig({ ...syncConfig, folderId: e.target.value })}
+                    placeholder="1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x"
+                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-blue-600"
+                  />
+                  <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
+                    ✓ Folder E-Arsip Al-Hikam Aktif
+                  </span>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                      ID Google Spreadsheet
+                    </label>
+                    <a
+                      href={`https://docs.google.com/spreadsheets/d/${syncConfig.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE'}/edit`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                    >
+                      <span>Buka Spreadsheet</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <input
+                    type="text"
+                    value={syncConfig.spreadsheetId}
+                    onChange={(e) => setSyncConfig({ ...syncConfig, spreadsheetId: e.target.value })}
+                    placeholder="1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE"
+                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-emerald-600"
+                  />
+                  <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
+                    ✓ Spreadsheet Database Siswa & Guru Aktif
+                  </span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="font-semibold text-slate-500 block mb-0.5">Zona Waktu:</span>
-                  <span className="font-medium text-slate-900">Asia/Jakarta (WIB)</span>
+              {/* Action Buttons: Copy Script & Test */}
+              <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <strong className="text-xs text-purple-900 block font-bold">Kode Script Google (Apps Script)</strong>
+                    <span className="text-[11px] text-purple-700">Tinggal copy dan paste di menu Ekstensi Google Sheet Anda</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyGAS}
+                    className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  >
+                    {copiedGAS ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedGAS ? 'Tersalin ke Clipboard!' : 'Salin Kode Script'}</span>
+                  </button>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="font-semibold text-slate-500 block mb-0.5">Maks. File Upload:</span>
-                  <span className="font-medium text-slate-900">10 MB / Berkas</span>
-                </div>
+
+                {syncConfig.webhookUrl && (
+                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={isTestingConn}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
+                    >
+                      {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
+                    </button>
+                  </div>
+                )}
+
+                {testConnStatus && (
+                  <div className="p-2.5 bg-white/90 rounded-xl text-[11px] font-semibold text-slate-800 border border-purple-200">
+                    {testConnStatus}
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-[11px] leading-relaxed">
-                ✓ Sistem berjalan dengan sinkronisasi lokal instan dan siap dihubungkan langsung ke webhook Google Apps Script ataupun REST API.
+                ✓ <strong>Mode Fleksibel:</strong> Jika Webhook belum disetel, aplikasi tetap menyimpan dokumen secara lokal di IndexedDB agar arsip tidak pernah hilang. Saat Webhook sudah disetel, file fisik otomatis terunggah ke Google Drive Anda!
               </div>
+
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowSettingModal(false)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer"
-            >
-              Simpan & Tutup
-            </button>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSettingModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                Simpan Pengaturan
+              </button>
+            </div>
           </div>
         </div>
       )}

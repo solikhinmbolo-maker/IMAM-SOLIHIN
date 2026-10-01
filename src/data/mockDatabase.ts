@@ -805,4 +805,108 @@ export function saveLegalisirRecord(record: LegalisirRecord): LegalisirRecord[] 
   return updated;
 }
 
+// =====================================================================
+// GOOGLE SHEETS & GOOGLE DRIVE INTEGRATION (WEBHOOK SYNC)
+// =====================================================================
+
+export interface GoogleSyncConfig {
+  webhookUrl: string;
+  folderId: string;
+  spreadsheetId: string;
+  autoSync: boolean;
+  lastSyncTime?: string;
+}
+
+export const DEFAULT_SYNC_CONFIG: GoogleSyncConfig = {
+  webhookUrl: '',
+  folderId: '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x',
+  spreadsheetId: '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE',
+  autoSync: true
+};
+
+export const DB_CONFIG_KEY = 'EARSIP_GOOGLE_CONFIG';
+
+export function getStoredSyncConfig(): GoogleSyncConfig {
+  try {
+    const raw = localStorage.getItem(DB_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.folderId === '1M_Ry_o-q7JGeXRfYdlpE8E2AuF_aOE8f' || !parsed.folderId) {
+        parsed.folderId = '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
+      }
+      if (parsed.spreadsheetId === '1ew4gfR53zeBdAcf57wWNdOmE9NiZjsvZikXgSxNHwEQ' || !parsed.spreadsheetId) {
+        parsed.spreadsheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+      }
+      return parsed;
+    }
+  } catch {}
+  return DEFAULT_SYNC_CONFIG;
+}
+
+export function saveStoredSyncConfig(cfg: GoogleSyncConfig) {
+  try {
+    localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(cfg));
+  } catch (err) {
+    console.error('Failed to save GoogleSyncConfig', err);
+  }
+}
+
+/**
+ * Sends archive item and uploaded base64 file directly to Google Apps Script
+ */
+export async function syncItemToGoogleCloud(
+  item: ArsipItem, 
+  fileBase64?: string
+): Promise<{ success: boolean; driveUrl?: string; message?: string }> {
+  const config = getStoredSyncConfig();
+  if (!config.webhookUrl || !config.webhookUrl.startsWith('http')) {
+    return { success: false, message: 'URL Webhook Google Apps Script belum disetel di Pengaturan.' };
+  }
+
+  try {
+    const payload = {
+      action: 'UPLOAD_ARSIP',
+      folderId: config.folderId,
+      spreadsheetId: config.spreadsheetId,
+      id: item.id,
+      tanggal: item.tanggal,
+      tahun: item.tahun,
+      identitas: item.identitas,
+      subjek: item.subjek,
+      kategori: item.kategori,
+      kategoriUtama: item.kategoriUtama,
+      namaFile: item.namaFileAsli,
+      ukuran: item.ukuran || '1.2 MB',
+      uploader: item.uploader,
+      fileData: fileBase64 || item.fileDataUrl || ''
+    };
+
+    // Google Apps Script requires text/plain or no-cors / standard json
+    const response = await fetch(config.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result && result.status === 'success') {
+      const realUrl = result.driveUrl || result.fileUrl || item.linkDrive;
+      return {
+        success: true,
+        driveUrl: realUrl,
+        message: 'Tersinkronisasi otomatis ke Google Drive & Google Sheet'
+      };
+    } else {
+      return {
+        success: false,
+        message: result?.message || 'Respon webhook tidak valid'
+      };
+    }
+  } catch (err: any) {
+    console.warn('Sync to Google Cloud error:', err);
+    return { success: false, message: err.message || 'Gagal mengirim ke Google Apps Script.' };
+  }
+}
+
+
 

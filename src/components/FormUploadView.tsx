@@ -35,7 +35,8 @@ import {
   saveArsipItem,
   replaceArsipItem,
   checkDuplicateArsip,
-  DuplicateCheckResult
+  DuplicateCheckResult,
+  syncItemToGoogleCloud
 } from '../data/mockDatabase';
 
 interface FormUploadViewProps {
@@ -265,6 +266,14 @@ export default function FormUploadView({
       } else {
         saveArsipItem(updatedArsip);
       }
+
+      // Asynchronously sync to Google Drive & Google Sheet if webhook is configured
+      syncItemToGoogleCloud(updatedArsip, fileBase64).then(res => {
+        if (res.success && res.driveUrl) {
+          updatedArsip.linkDrive = res.driveUrl;
+          replaceArsipItem(newId, updatedArsip);
+        }
+      }).catch(e => console.warn('Background sync warning:', e));
 
       setStoredArsipList(getStoredArsip());
       setIsUploading(false);
