@@ -917,6 +917,22 @@ export function clearAllArsipData(): void {
 }
 
 /**
+ * Clear all sample demo students & teachers from Master Data (Buku Induk)
+ */
+export function clearAllMasterData(): void {
+  safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify([]));
+  safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify([]));
+}
+
+/**
+ * Restore sample initial master students & teachers for demonstration
+ */
+export function restoreSampleMasterData(): void {
+  safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(INITIAL_MASTER_SISWA));
+  safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(INITIAL_MASTER_GURU));
+}
+
+/**
  * Restore sample initial archives for demonstration
  */
 export function restoreSampleArsipData(): void {

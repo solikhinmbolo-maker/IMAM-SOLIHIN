@@ -29,6 +29,8 @@ import {
   deleteMasterSiswa, 
   saveMasterGuru, 
   deleteMasterGuru,
+  clearAllMasterData,
+  restoreSampleMasterData,
   KATEGORI_SISWA,
   KATEGORI_GURU
 } from '../data/mockDatabase';
@@ -240,6 +242,38 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
               <span className="hidden sm:inline">Export CSV</span>
             </button>
 
+            {(siswaList.length > 0 || guruList.length > 0) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Kosongkan semua data siswa & guru contoh bawaan agar buku induk mulai bersih dari angka 0?')) {
+                    clearAllMasterData();
+                    setSiswaList([]);
+                    setGuruList([]);
+                  }
+                }}
+                className="px-3 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100/70 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Hapus data contoh demo siswa & guru"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Kosongkan Data Demo</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  restoreSampleMasterData();
+                  setSiswaList(getStoredMasterSiswa());
+                  setGuruList(getStoredMasterGuru());
+                }}
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Muat kembali data contoh"
+              >
+                <Users className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Muat Contoh Demo</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setEditingItem(null);
@@ -251,7 +285,7 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
               className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Tambah {activeTab === 'siswa' ? 'Siswa' : 'Guru'}</span>
+              <span>+ Tambah {activeTab === 'siswa' ? 'Siswa' : 'Guru'}</span>
             </button>
           </div>
         </div>

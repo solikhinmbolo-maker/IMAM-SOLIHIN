@@ -20,7 +20,8 @@ import {
   History,
   FileWarning,
   CopyCheck,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import { 
   MasterSiswaItem, 
@@ -36,7 +37,9 @@ import {
   replaceArsipItem,
   checkDuplicateArsip,
   DuplicateCheckResult,
-  syncItemToGoogleCloud
+  syncItemToGoogleCloud,
+  saveMasterSiswa,
+  saveMasterGuru
 } from '../data/mockDatabase';
 
 interface FormUploadViewProps {
@@ -96,6 +99,54 @@ export default function FormUploadView({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successInfo, setSuccessInfo] = useState<{ count: number; name: string }>({ count: 1, name: '' });
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Quick Add State for Siswa & Guru
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [quickNama, setQuickNama] = useState('');
+  const [quickIdentitas, setQuickIdentitas] = useState('');
+  const [quickKelasJabatan, setQuickKelasJabatan] = useState('');
+  const [quickTahun, setQuickTahun] = useState('');
+
+  const handleQuickAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickNama.trim() || !quickIdentitas.trim()) return;
+
+    if (jenisArsip === 'Arsip Siswa') {
+      const yearToSet = quickTahun.trim() || tahun || new Date().getFullYear().toString();
+      const newSiswa: MasterSiswaItem = {
+        id: `S${Date.now().toString().slice(-4)}`,
+        nama: quickNama.trim(),
+        nisn: quickIdentitas.trim(),
+        tahun: yearToSet,
+        kelas: quickKelasJabatan.trim() || '9A'
+      };
+      const updatedList = saveMasterSiswa(newSiswa);
+      setMasterSiswa(updatedList);
+      setTahun(yearToSet);
+      setNamaSubjek(newSiswa.nama);
+      setIdentitas(newSiswa.nisn);
+      
+      // Update distinct tahun list if new year added
+      setTahunList(prev => Array.from(new Set([...prev, yearToSet])).sort().reverse());
+    } else if (jenisArsip === 'Arsip Guru') {
+      const newGuru: MasterGuruItem = {
+        id: `G${Date.now().toString().slice(-4)}`,
+        nama: quickNama.trim(),
+        nuptk: quickIdentitas.trim(),
+        jabatan: quickKelasJabatan.trim() || 'Guru Pengajar'
+      };
+      const updatedList = saveMasterGuru(newGuru);
+      setMasterGuru(updatedList);
+      setNamaSubjek(newGuru.nama);
+      setIdentitas(newGuru.nuptk);
+    }
+
+    setShowQuickAddModal(false);
+    setQuickNama('');
+    setQuickIdentitas('');
+    setQuickKelasJabatan('');
+    setQuickTahun('');
+  };
 
   // Load Master Data & Existing Archives
   useEffect(() => {
@@ -582,14 +633,50 @@ export default function FormUploadView({
 
         {/* Row 2: Nama Subjek / Siswa / Guru */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-blue-500" />
-            <span>
-              {jenisArsip === 'Arsip Siswa' ? 'Nama Siswa / Alumni' : 
-               jenisArsip === 'Arsip Guru' ? 'Nama Guru / Pegawai' : 'Nama Instansi / Perihal Surat'}
-            </span>
-            <span className="text-red-500">*</span>
-          </label>
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-blue-500" />
+              <span>
+                {jenisArsip === 'Arsip Siswa' ? 'Nama Siswa / Alumni' : 
+                 jenisArsip === 'Arsip Guru' ? 'Nama Guru / Pegawai' : 'Nama Instansi / Perihal Surat'}
+              </span>
+              <span className="text-red-500">*</span>
+            </label>
+
+            {jenisArsip === 'Arsip Siswa' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickNama('');
+                  setQuickIdentitas('');
+                  setQuickKelasJabatan('9A');
+                  setQuickTahun(tahun || new Date().getFullYear().toString());
+                  setShowQuickAddModal(true);
+                }}
+                className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ Input Siswa Baru</span>
+              </button>
+            )}
+
+            {jenisArsip === 'Arsip Guru' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickNama('');
+                  setQuickIdentitas('');
+                  setQuickKelasJabatan('Guru Pengajar');
+                  setShowQuickAddModal(true);
+                }}
+                className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ Input Guru Baru</span>
+              </button>
+            )}
+          </div>
+
           {jenisArsip === 'Arsip Siswa' ? (
             <div className="relative">
               <select
@@ -598,7 +685,11 @@ export default function FormUploadView({
                 required
                 className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
               >
-                <option value="" disabled>-- Pilih Nama Siswa --</option>
+                <option value="" disabled>
+                  {siswaFilter.length === 0 
+                    ? '-- Belum ada data siswa di angkatan ini (Klik "+ Input Siswa Baru") --' 
+                    : '-- Pilih Nama Siswa --'}
+                </option>
                 {siswaFilter.map(s => (
                   <option key={s.id} value={s.nama}>{s.nama} ({s.kelas})</option>
                 ))}
@@ -613,7 +704,11 @@ export default function FormUploadView({
                 required
                 className="w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
               >
-                <option value="" disabled>-- Pilih Nama Guru --</option>
+                <option value="" disabled>
+                  {masterGuru.length === 0 
+                    ? '-- Belum ada data guru (Klik "+ Input Guru Baru") --' 
+                    : '-- Pilih Nama Guru --'}
+                </option>
                 {masterGuru.map(g => (
                   <option key={g.id} value={g.nama}>{g.nama} - {g.jabatan}</option>
                 ))}
@@ -1047,6 +1142,121 @@ export default function FormUploadView({
             >
               Lihat di Daftar Unduh
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Quick Input Siswa / Guru Baru */}
+      {showQuickAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn font-['Poppins']">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl animate-scaleUp border border-slate-200">
+            <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                  {jenisArsip === 'Arsip Siswa' ? 'Tambah Data Siswa Baru' : 'Tambah Data Guru Baru'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAddSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {jenisArsip === 'Arsip Siswa' ? 'Nama Lengkap Siswa' : 'Nama Lengkap Guru (Beserta Gelar)'} *
+                </label>
+                <input
+                  type="text"
+                  value={quickNama}
+                  onChange={(e) => setQuickNama(e.target.value)}
+                  placeholder={jenisArsip === 'Arsip Siswa' ? 'Contoh: Ahmad Dahlan' : 'Contoh: Drs. H. Solikhin, M.Pd'}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {jenisArsip === 'Arsip Siswa' ? 'NISN / NIS' : 'NIP / NUPTK'} *
+                </label>
+                <input
+                  type="text"
+                  value={quickIdentitas}
+                  onChange={(e) => setQuickIdentitas(e.target.value)}
+                  placeholder={jenisArsip === 'Arsip Siswa' ? '10 digit NISN' : '16/18 digit NUPTK/NIP'}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {jenisArsip === 'Arsip Siswa' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Tahun Angkatan *
+                    </label>
+                    <input
+                      type="number"
+                      value={quickTahun}
+                      onChange={(e) => setQuickTahun(e.target.value)}
+                      placeholder="2026"
+                      required
+                      className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Kelas
+                    </label>
+                    <input
+                      type="text"
+                      value={quickKelasJabatan}
+                      onChange={(e) => setQuickKelasJabatan(e.target.value)}
+                      placeholder="Contoh: 9A"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Jabatan / Bidang Studi
+                  </label>
+                  <input
+                    type="text"
+                    value={quickKelasJabatan}
+                    onChange={(e) => setQuickKelasJabatan(e.target.value)}
+                    placeholder="Contoh: Guru Matematika / Wali Kelas"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Simpan & Pilih</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
