@@ -271,80 +271,72 @@ export default function FormUploadView({
     }
   };
 
-  const startIndividualUpload = (replaceExistingId?: string) => {
+  const startIndividualUpload = async (replaceExistingId?: string) => {
     if (!selectedFile) return;
 
     setIsUploading(true);
     setProgressPercent(20);
     setProgressStatus(replaceExistingId ? 'Memperbarui dokumen arsip...' : 'Membaca & memverifikasi dokumen...');
 
-    const timer1 = setTimeout(() => {
-      setProgressPercent(60);
-      setProgressStatus(replaceExistingId ? 'Menimpa berkas di Google Drive E-Arsip...' : 'Mengunggah ke folder Google Drive E-Arsip...');
-    }, 400);
+    const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const newId = replaceExistingId || `${prefix}-${randomNum}`;
+    const todayStr = new Date().toLocaleDateString('id-ID');
 
-    const timer2 = setTimeout(() => {
-      setProgressPercent(90);
-      setProgressStatus('Mencatat riwayat ke database spreadsheet...');
-    }, 700);
+    const updatedArsip: ArsipItem = {
+      id: newId,
+      tanggal: todayStr,
+      tahun: tahun || new Date().getFullYear().toString(),
+      identitas: identitas || '-',
+      subjek: namaSubjek,
+      kategori: kategori,
+      kategoriUtama: jenisArsip,
+      namaFileAsli: selectedFile.name,
+      ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
+      linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+      uploader: 'admin@alhicam.sch.id',
+      fileDataUrl: fileBase64
+    };
 
-    const timer3 = setTimeout(() => {
-      setProgressPercent(100);
-      setProgressStatus(replaceExistingId ? 'Berkas berhasil diperbarui!' : 'Pengarsipan selesai!');
+    setProgressPercent(60);
+    setProgressStatus('Mengunggah ke Google Drive & mencatat ke Google Sheet...');
 
-      const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const newId = replaceExistingId || `${prefix}-${randomNum}`;
-      const todayStr = new Date().toLocaleDateString('id-ID');
-
-      const updatedArsip: ArsipItem = {
-        id: newId,
-        tanggal: todayStr,
-        tahun: tahun || new Date().getFullYear().toString(),
-        identitas: identitas || '-',
-        subjek: namaSubjek,
-        kategori: kategori,
-        kategoriUtama: jenisArsip,
-        namaFileAsli: selectedFile.name,
-        ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
-        linkDrive: `https://drive.google.com/file/d/${newId}/view`,
-        uploader: 'admin@alhicam.sch.id',
-        fileDataUrl: fileBase64
-      };
-
-      if (replaceExistingId) {
-        replaceArsipItem(replaceExistingId, updatedArsip);
-      } else {
-        saveArsipItem(updatedArsip);
+    try {
+      const res = await syncItemToGoogleCloud(updatedArsip, fileBase64);
+      if (res.success && res.driveUrl) {
+        updatedArsip.linkDrive = res.driveUrl;
       }
+    } catch (e) {
+      console.warn('Sync warning:', e);
+    }
 
-      // Asynchronously sync to Google Drive & Google Sheet if webhook is configured
-      syncItemToGoogleCloud(updatedArsip, fileBase64).then(res => {
-        if (res.success && res.driveUrl) {
-          updatedArsip.linkDrive = res.driveUrl;
-          replaceArsipItem(newId, updatedArsip);
-        }
-      }).catch(e => console.warn('Background sync warning:', e));
+    if (replaceExistingId) {
+      replaceArsipItem(replaceExistingId, updatedArsip);
+    } else {
+      saveArsipItem(updatedArsip);
+    }
 
-      setStoredArsipList(getStoredArsip());
-      setIsUploading(false);
-      playSuccessSound();
-      setSuccessInfo({ 
-        count: 1, 
-        name: replaceExistingId ? `${namaSubjek} (${kategori} Diperbarui)` : namaSubjek 
-      });
-      setShowSuccessModal(true);
-      setShowDuplicateModal(false);
+    setProgressPercent(100);
+    setProgressStatus('Selesai disimpan di Google Drive & Google Spreadsheet!');
 
-      // Reset
-      setSelectedFile(null);
-      setFileBase64('');
-      setNamaDokumen('');
-      setDuplicateCheck({ isDuplicate: false });
-    }, 1100);
+    setStoredArsipList(getStoredArsip());
+    setIsUploading(false);
+    playSuccessSound();
+    setSuccessInfo({ 
+      count: 1, 
+      name: replaceExistingId ? `${namaSubjek} (${kategori} Diperbarui)` : namaSubjek 
+    });
+    setShowSuccessModal(true);
+    setShowDuplicateModal(false);
+
+    // Reset
+    setSelectedFile(null);
+    setFileBase64('');
+    setNamaDokumen('');
+    setDuplicateCheck({ isDuplicate: false });
   };
 
-  const startKolektifUpload = (replaceDuplicates: boolean = false) => {
+  const startKolektifUpload = async (replaceDuplicates: boolean = false) => {
     const count = Object.keys(kolektifFiles).length;
     if (count === 0) {
       setErrorMessage('Pilih minimal 1 berkas pada daftar kategori untuk upload kolektif.');
@@ -355,80 +347,71 @@ export default function FormUploadView({
     setProgressPercent(15);
     setProgressStatus(`Mempersiapkan pengunggahan ${count} berkas...`);
 
-    let currentStep = 0;
     const categories = Object.keys(kolektifFiles);
+    const todayStr = new Date().toLocaleDateString('id-ID');
+    const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
+    const currentArsip = getStoredArsip();
 
-    const interval = setInterval(() => {
-      currentStep++;
-      const percent = Math.min(95, Math.round((currentStep / count) * 90));
+    for (let idx = 0; idx < categories.length; idx++) {
+      const katKey = categories[idx];
+      const fileObj = kolektifFiles[katKey];
+      const existing = currentArsip.find(it => 
+        it.kategoriUtama === jenisArsip &&
+        it.subjek.trim().toLowerCase() === namaSubjek.trim().toLowerCase() &&
+        it.kategori.trim().toLowerCase() === katKey.trim().toLowerCase()
+      );
+
+      const percent = Math.min(95, Math.round(((idx + 1) / count) * 90));
       setProgressPercent(percent);
-      setProgressStatus(`Mengunggah berkas (${currentStep}/${count}): ${categories[currentStep - 1] || 'Selesai'}...`);
+      setProgressStatus(`Menyimpan berkas (${idx + 1}/${count}): ${katKey} ke Drive & Sheet...`);
 
-      if (currentStep >= count) {
-        clearInterval(interval);
+      const randomNum = Math.floor(1000 + Math.random() * 9000) + idx;
+      const newId = (replaceDuplicates && existing) ? existing.id : `${prefix}-${randomNum}`;
 
-        setTimeout(() => {
-          setProgressPercent(100);
-          setProgressStatus('Semua berkas kolektif berhasil disimpan!');
+      const itemToSave: ArsipItem = {
+        id: newId,
+        tanggal: todayStr,
+        tahun: tahun || new Date().getFullYear().toString(),
+        identitas: identitas || '-',
+        subjek: namaSubjek,
+        kategori: katKey,
+        kategoriUtama: jenisArsip,
+        namaFileAsli: fileObj.file.name,
+        ukuran: `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`,
+        linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+        uploader: 'admin@alhicam.sch.id',
+        fileDataUrl: fileObj.base64
+      };
 
-          const todayStr = new Date().toLocaleDateString('id-ID');
-          const prefix = jenisArsip === 'Arsip Siswa' ? 'SSW' : jenisArsip === 'Arsip Guru' ? 'GRU' : 'LYN';
-          const currentArsip = getStoredArsip();
-
-          categories.forEach((katKey, idx) => {
-            const fileObj = kolektifFiles[katKey];
-            const existing = currentArsip.find(it => 
-              it.kategoriUtama === jenisArsip &&
-              it.subjek.trim().toLowerCase() === namaSubjek.trim().toLowerCase() &&
-              it.kategori.trim().toLowerCase() === katKey.trim().toLowerCase()
-            );
-
-            const randomNum = Math.floor(1000 + Math.random() * 9000) + idx;
-            const newId = (replaceDuplicates && existing) ? existing.id : `${prefix}-${randomNum}`;
-
-            const itemToSave: ArsipItem = {
-              id: newId,
-              tanggal: todayStr,
-              tahun: tahun || new Date().getFullYear().toString(),
-              identitas: identitas || '-',
-              subjek: namaSubjek,
-              kategori: katKey,
-              kategoriUtama: jenisArsip,
-              namaFileAsli: fileObj.file.name,
-              ukuran: `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`,
-              linkDrive: `https://drive.google.com/file/d/${newId}/view`,
-              uploader: 'admin@alhicam.sch.id',
-              fileDataUrl: fileObj.base64
-            };
-
-            if (replaceDuplicates && existing) {
-              replaceArsipItem(existing.id, itemToSave);
-            } else {
-              saveArsipItem(itemToSave);
-            }
-
-            // Sync each kolektif document to Google Cloud
-            syncItemToGoogleCloud(itemToSave, fileObj.base64).then(res => {
-              if (res.success && res.driveUrl) {
-                itemToSave.linkDrive = res.driveUrl;
-                replaceArsipItem(newId, itemToSave);
-              }
-            }).catch(e => console.warn('Kolektif sync warning:', e));
-          });
-
-          setStoredArsipList(getStoredArsip());
-          setIsUploading(false);
-          playSuccessSound();
-          setSuccessInfo({ count, name: namaSubjek });
-          setShowSuccessModal(true);
-          setShowKolektifDuplicateModal(false);
-
-          // Reset
-          setKolektifFiles({});
-          setNamaDokumen('');
-        }, 300);
+      try {
+        const res = await syncItemToGoogleCloud(itemToSave, fileObj.base64);
+        if (res.success && res.driveUrl) {
+          itemToSave.linkDrive = res.driveUrl;
+        }
+      } catch (e) {
+        console.warn('Kolektif sync warning:', e);
       }
-    }, 250);
+
+      if (replaceDuplicates && existing) {
+        replaceArsipItem(existing.id, itemToSave);
+      } else {
+        saveArsipItem(itemToSave);
+      }
+    }
+
+    setProgressPercent(100);
+    setProgressStatus('Semua berkas kolektif berhasil disimpan!');
+
+    setStoredArsipList(getStoredArsip());
+    setIsUploading(false);
+    playSuccessSound();
+    setSuccessInfo({ count, name: namaSubjek });
+    setShowSuccessModal(true);
+    setShowKolektifDuplicateModal(false);
+
+    // Reset
+    setKolektifFiles({});
+    setNamaDokumen('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {

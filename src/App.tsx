@@ -182,134 +182,137 @@ export default function App() {
 
   const handleCopyGAS = () => {
     const code = `// ================================================================
-// GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM
+// GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM (V3.0 ANTI-DUPLIKAT)
 // Database Terpusat: Google Drive & Google Spreadsheet
 // ================================================================
 
-// 1. JALANKAN FUNGSI INI SEKALI (KLIK TOMBOL RUN/JALANKAN DI APPS SCRIPT)
-// Berfungsi menyiapkan 6 TAB DATABASE LENGKAP di Spreadsheet Anda:
-// • DATA_MASTER_SISWA
-// • DATA_MASTER_GURU
-// • REKAP_SEMUA_ARSIP
-// • ARSIP_SISWA
-// • ARSIP_GURU
-// • ARSIP_LAINNYA
+// 1. JALANKAN FUNGSI INI SEKALI (KLIK RUN/JALANKAN DI APPS SCRIPT)
+// Berfungsi menyiapkan 6 Tab & Otomatis Membersihkan Baris Duplikat
 function setupDatabaseDanIzin() {
-  var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-  var ss;
-  try {
-    ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
-  } catch(e) {
-    ss = SpreadsheetApp.openById(sheetId);
-  }
+  var ss = getSpreadsheet();
 
-  // Header Master Siswa
   getOrCreateSheet(ss, 'DATA_MASTER_SISWA', [
     'NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR'
   ]);
 
-  // Header Master Guru & PTK
   getOrCreateSheet(ss, 'DATA_MASTER_GURU', [
     'NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR'
   ]);
 
-  // Header Arsip Dokumen
   var headersArsip = [
     'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
     'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
     'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
   ];
-  getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
-  getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
-  getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
-  getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
 
-  Logger.log('BERHASIL! 6 Tab database telah otomatis disiapkan di Spreadsheet: ' + ss.getName());
+  var sAll = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
+  var sSiswa = getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
+  var sGuru = getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
+  var sLain = getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
+
+  // Bersihkan data duplikat jika pernah ada klik ganda sebelumnya
+  cleanDuplicatesInSheet(sAll);
+  cleanDuplicatesInSheet(sSiswa);
+  cleanDuplicatesInSheet(sGuru);
+  cleanDuplicatesInSheet(sLain);
+
+  SpreadsheetApp.flush();
+  Logger.log('BERHASIL! 6 Tab database siap & bersih dari duplikasi di: ' + ss.getName());
 }
 
-// 2. WEBHOOK PENERIMA UPLOAD & DATA DARI APLIKASI WEB
+function getSpreadsheet() {
+  var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss && ss.getId()) return ss;
+  } catch(e) {}
+  return SpreadsheetApp.openById(sheetId);
+}
+
+// 2. WEBHOOK PENERIMA UPLOAD & SINKRONISASI
 function doPost(e) {
   try {
-    var data = JSON.parse(e.postData.contents);
+    var contents = (e && e.postData) ? e.postData.contents : '{}';
+    var data = JSON.parse(contents);
+    var ss = getSpreadsheet();
     var rootFolderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
-    var sheetId = data.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-    var ss;
-    try {
-      ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
-    } catch(eOpen) {
-      ss = SpreadsheetApp.openById(sheetId);
-    }
 
-    // A. JIKA ACTION ADALAH SINKRONISASI MASTER SISWA / GURU
+    var headersArsip = [
+      'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
+      'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
+      'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
+    ];
+
+    // A. JIKA ACTION: SINKRONISASI MASTER SISWA & GURU
     if (data.action === 'SYNC_ALL_MASTER') {
       if (data.siswaList && data.siswaList.length > 0) {
-        var sheetSiswa = getOrCreateSheet(ss, 'DATA_MASTER_SISWA', [
-          'NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR'
-        ]);
-        var existingSiswa = sheetSiswa.getDataRange().getValues();
-        var existingNisns = existingSiswa.map(function(row) { return String(row[0]).trim(); });
-        
+        var sSheet = getOrCreateSheet(ss, 'DATA_MASTER_SISWA', ['NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR']);
         data.siswaList.forEach(function(s) {
-          if (existingNisns.indexOf(String(s.nisn).trim()) === -1) {
-            sheetSiswa.appendRow([s.nisn, s.nama, s.tahun, s.kelas, new Date().toLocaleDateString('id-ID')]);
-          }
+          upsertMasterRow(sSheet, [String(s.nisn), String(s.nama), String(s.tahun), String(s.kelas), Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
         });
       }
-
       if (data.guruList && data.guruList.length > 0) {
-        var sheetGuru = getOrCreateSheet(ss, 'DATA_MASTER_GURU', [
-          'NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR'
-        ]);
-        var existingGuru = sheetGuru.getDataRange().getValues();
-        var existingNuptks = existingGuru.map(function(row) { return String(row[0]).trim(); });
-
+        var gSheet = getOrCreateSheet(ss, 'DATA_MASTER_GURU', ['NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR']);
         data.guruList.forEach(function(g) {
-          if (existingNuptks.indexOf(String(g.nuptk).trim()) === -1) {
-            sheetGuru.appendRow([g.nuptk, g.nama, g.jabatan, new Date().toLocaleDateString('id-ID')]);
-          }
+          upsertMasterRow(gSheet, [String(g.nuptk), String(g.nama), String(g.jabatan), Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
         });
       }
-
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'success',
-        message: 'Master Siswa & Guru berhasil disinkronkan ke Spreadsheet!'
-      })).setMimeType(ContentService.MimeType.JSON);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Master siswa & guru tersimpan di Sheet!' })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // B. PROSES SIMPAN BERKAS FISIK KE GOOGLE DRIVE
+    // B. JIKA ACTION: CATAT BANYAK BERKAS SEKALIGUS (ANTI-DUPLIKAT)
+    if (data.action === 'SYNC_ALL_ARSIP_ITEMS') {
+      if (data.items && data.items.length > 0) {
+        var sAll = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
+        var sSiswa = getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
+        var sGuru = getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
+        var sLain = getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
+
+        data.items.forEach(function(item) {
+          var row = [
+            item.id, item.tanggal, item.tahun, item.identitas,
+            item.subjek, item.kategori, item.kategoriUtama, item.namaFileAsli || item.namaFile,
+            item.ukuran, item.uploader || 'Admin', item.linkDrive || '-'
+          ];
+          upsertArsipRow(sAll, row);
+          if (item.kategoriUtama === 'Arsip Siswa') upsertArsipRow(sSiswa, row);
+          else if (item.kategoriUtama === 'Arsip Guru') upsertArsipRow(sGuru, row);
+          else upsertArsipRow(sLain, row);
+        });
+
+        cleanDuplicatesInSheet(sAll);
+        cleanDuplicatesInSheet(sSiswa);
+        cleanDuplicatesInSheet(sGuru);
+        cleanDuplicatesInSheet(sLain);
+        SpreadsheetApp.flush();
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Seluruh berkas berhasil dicatat tanpa duplikat!' })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // C. PROSES UPLOAD SATU BERKAS FISIK KE DRIVE & SHEET
     var rootFolder = DriveApp.getFolderById(rootFolderId);
     var subfolderName = '3. ARSIP LAINNYA';
-    if (data.kategoriUtama === 'Arsip Siswa') {
-      subfolderName = '1. ARSIP SISWA';
-    } else if (data.kategoriUtama === 'Arsip Guru') {
-      subfolderName = '2. ARSIP GURU & PTK';
-    }
+    if (data.kategoriUtama === 'Arsip Siswa') subfolderName = '1. ARSIP SISWA';
+    else if (data.kategoriUtama === 'Arsip Guru') subfolderName = '2. ARSIP GURU & PTK';
     var categoryFolder = getOrCreateFolder(rootFolder, subfolderName);
-    
+
     var targetFolder = categoryFolder;
     if (data.tahun && data.tahun !== '-') {
       targetFolder = getOrCreateFolder(categoryFolder, 'Angkatan ' + data.tahun);
     }
 
-    var fileUrl = '-';
+    var fileUrl = data.linkDrive || '-';
     if (data.fileData && data.fileData.indexOf('base64,') > -1) {
       var split = data.fileData.split('base64,');
       var contentType = split[0].split(':')[1].split(';')[0];
       var bytes = Utilities.base64Decode(split[1]);
       var cleanFileName = (data.subjek ? data.subjek + ' - ' : '') + (data.kategori || 'Dokumen') + ' - ' + (data.namaFile || 'arsip.pdf');
       var blob = Utilities.newBlob(bytes, contentType, cleanFileName);
-      
       var file = targetFolder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       fileUrl = file.getUrl();
     }
-
-    // C. PROSES TULIS BARIS REKAP KE GOOGLE SPREADSHEET
-    var headersArsip = [
-      'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
-      'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
-      'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
-    ];
 
     var rowData = [
       data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
@@ -325,59 +328,118 @@ function doPost(e) {
       fileUrl
     ];
 
-    // 1. Tulis ke Tab REKAP_SEMUA_ARSIP
-    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
-    sheetSemua.appendRow(rowData);
+    // Tulis ke Tab Rekap & Kategori (Update jika ada, tambah jika baru)
+    var sAll = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
+    upsertArsipRow(sAll, rowData);
 
-    // 2. Tulis ke Tab Kategori Khusus (ARSIP_SISWA / ARSIP_GURU / ARSIP_LAINNYA)
     var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
-    var sheetKategori = getOrCreateSheet(ss, tabName, headersArsip);
-    sheetKategori.appendRow(rowData);
+    var sKat = getOrCreateSheet(ss, tabName, headersArsip);
+    upsertArsipRow(sKat, rowData);
 
-    // 3. Otomatis Catat ke DATA_MASTER_SISWA / DATA_MASTER_GURU jika belum ada
+    // Otomatis Catat ke DATA_MASTER_SISWA / DATA_MASTER_GURU jika belum ada
     if (data.kategoriUtama === 'Arsip Siswa' && data.subjek && data.identitas) {
       var sMaster = getOrCreateSheet(ss, 'DATA_MASTER_SISWA', ['NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR']);
-      var sVals = sMaster.getDataRange().getValues();
-      var sNisns = sVals.map(function(r) { return String(r[0]).trim(); });
-      if (sNisns.indexOf(String(data.identitas).trim()) === -1) {
-        sMaster.appendRow([data.identitas, data.subjek, data.tahun || '-', '9A', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
-      }
+      upsertMasterRow(sMaster, [String(data.identitas), String(data.subjek), String(data.tahun || '-'), '9A', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
     } else if (data.kategoriUtama === 'Arsip Guru' && data.subjek && data.identitas) {
       var gMaster = getOrCreateSheet(ss, 'DATA_MASTER_GURU', ['NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR']);
-      var gVals = gMaster.getDataRange().getValues();
-      var gNuptks = gVals.map(function(r) { return String(r[0]).trim(); });
-      if (gNuptks.indexOf(String(data.identitas).trim()) === -1) {
-        gMaster.appendRow([data.identitas, data.subjek, 'Guru Pengajar', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
-      }
+      upsertMasterRow(gMaster, [String(data.identitas), String(data.subjek), 'Guru Pengajar', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
     }
+
+    SpreadsheetApp.flush();
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       driveUrl: fileUrl,
-      message: 'Berhasil tersimpan di Google Drive & tertulis di Google Spreadsheet!'
+      message: 'Berhasil dicatat di Google Spreadsheet & disimpan di Drive!'
     })).setMimeType(ContentService.MimeType.JSON);
 
-  } catch (error) {
+  } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
-      message: error.toString()
+      message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-// Helper: Cari atau Buat Subfolder Otomatis di Google Drive
+// Helper: Tulis atau Update Baris Arsip (100% Anti-Duplikat!)
+function upsertArsipRow(sheet, rowData) {
+  var targetId = String(rowData[0]).trim();
+  var rows = sheet.getDataRange().getValues();
+  var foundRowIndex = -1;
+
+  for (var i = 1; i < rows.length; i++) {
+    var existingId = String(rows[i][0]).trim();
+    var existingSubjek = String(rows[i][4]).trim().toLowerCase();
+    var existingKat = String(rows[i][5]).trim().toLowerCase();
+
+    var curSubjek = String(rowData[4]).trim().toLowerCase();
+    var curKat = String(rowData[5]).trim().toLowerCase();
+
+    if ((targetId && existingId === targetId) || (curSubjek && curKat && existingSubjek === curSubjek && existingKat === curKat)) {
+      foundRowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (foundRowIndex > 0) {
+    sheet.getRange(foundRowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+}
+
+// Helper: Tulis atau Update Baris Master
+function upsertMasterRow(sheet, rowData) {
+  var targetKey = String(rowData[0]).trim();
+  var rows = sheet.getDataRange().getValues();
+  var found = false;
+
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === targetKey) {
+      sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    sheet.appendRow(rowData);
+  }
+}
+
+// Helper: Hapus Baris Duplikat
+function cleanDuplicatesInSheet(sheet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 2) return;
+  var seen = {};
+  var toDelete = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var subjek = String(data[i][4] || '').trim().toLowerCase();
+    var kat = String(data[i][5] || '').trim().toLowerCase();
+    var key = subjek + '___' + kat;
+    if (!subjek) continue;
+
+    if (seen[key]) {
+      toDelete.push(i + 1);
+    } else {
+      seen[key] = true;
+    }
+  }
+
+  for (var j = toDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(toDelete[j]);
+  }
+}
+
+// Helper Folder
 function getOrCreateFolder(parent, name) {
-  if (!parent) {
-    parent = DriveApp.getFolderById('1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x');
-  }
+  if (!parent) parent = DriveApp.getFolderById('1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x');
   var folders = parent.getFoldersByName(name);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
+  if (folders.hasNext()) return folders.next();
   return parent.createFolder(name);
 }
 
-// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap
+// Helper Sheet
 function getOrCreateSheet(ss, name, headers) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
@@ -401,37 +463,34 @@ function getOrCreateSheet(ss, name, headers) {
   return sheet;
 }
 
-// 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET KE APLIKASI WEB
+// 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET (DEDUPLIKASI OTOMATIS)
 function doGet(e) {
   try {
-    var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-    var ss;
-    try {
-      ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
-    } catch(eOpen) {
-      ss = SpreadsheetApp.openById(sheetId);
-    }
-
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('REKAP_SEMUA_ARSIP');
     if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'success',
-        items: []
-      })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', items: [] })).setMimeType(ContentService.MimeType.JSON);
     }
 
     var rows = sheet.getDataRange().getValues();
     var items = [];
+    var seenKeys = {};
+
     for (var i = 1; i < rows.length; i++) {
       var r = rows[i];
-      if (r[0] && String(r[0]).trim() !== '') {
+      var subjek = String(r[4] || '').trim();
+      var kat = String(r[5] || '').trim();
+      var key = (subjek + '___' + kat).toLowerCase();
+
+      if (r[0] && subjek && !seenKeys[key]) {
+        seenKeys[key] = true;
         items.push({
           id: String(r[0]),
           tanggal: String(r[1]),
           tahun: String(r[2]),
           identitas: String(r[3]),
-          subjek: String(r[4]),
-          kategori: String(r[5]),
+          subjek: subjek,
+          kategori: kat,
           kategoriUtama: String(r[6]),
           namaFile: String(r[7]),
           ukuran: String(r[8]),

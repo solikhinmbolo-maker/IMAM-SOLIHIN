@@ -36,8 +36,18 @@ export default function FormUnduhView({
   const [isPushingToGoogle, setIsPushingToGoogle] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
 
-  // Get data
-  const allArsip = getStoredArsip();
+  // Get data with strict deduplication
+  const rawArsip = getStoredArsip();
+  const allArsip = useMemo(() => {
+    const map = new Map<string, ArsipItem>();
+    rawArsip.forEach(item => {
+      const key = `${(item.subjek || '').trim().toLowerCase()}___${(item.kategori || '').trim().toLowerCase()}`;
+      if (!map.has(key)) {
+        map.set(key, item);
+      }
+    });
+    return Array.from(map.values());
+  }, [rawArsip]);
 
   // Filter based on active category
   const scopedData = useMemo(() => {
