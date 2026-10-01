@@ -909,6 +909,41 @@ export async function syncItemToGoogleCloud(
 }
 
 /**
+ * Push all master siswa & guru to Google Spreadsheet DATA_MASTER_SISWA and DATA_MASTER_GURU tabs
+ */
+export async function syncMasterToGoogleSheet(): Promise<{ success: boolean; message: string }> {
+  const config = getStoredSyncConfig();
+  if (!config.webhookUrl || !config.webhookUrl.startsWith('http')) {
+    return { success: false, message: 'URL Webhook belum diatur di Pengaturan Google Cloud' };
+  }
+  const siswaList = getStoredMasterSiswa();
+  const guruList = getStoredMasterGuru();
+
+  try {
+    const payload = {
+      action: 'SYNC_ALL_MASTER',
+      spreadsheetId: config.spreadsheetId,
+      siswaList,
+      guruList
+    };
+
+    const response = await fetch(config.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result && result.status === 'success') {
+      return { success: true, message: 'Daftar Siswa & Guru berhasil dicatat ke tab DATA_MASTER_SISWA dan DATA_MASTER_GURU di Spreadsheet!' };
+    }
+    return { success: false, message: result?.message || 'Respon webhook gagal' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal mengirim data ke Google Spreadsheet' };
+  }
+}
+
+/**
  * Fetch live archives directly from Google Spreadsheet / Drive via Webhook
  */
 export async function fetchLiveArsipFromGoogle(): Promise<{ success: boolean; items?: ArsipItem[]; message?: string }> {

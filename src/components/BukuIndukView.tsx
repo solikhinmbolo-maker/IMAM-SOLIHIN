@@ -31,6 +31,7 @@ import {
   deleteMasterGuru,
   clearAllMasterData,
   restoreSampleMasterData,
+  syncMasterToGoogleSheet,
   KATEGORI_SISWA,
   KATEGORI_GURU
 } from '../data/mockDatabase';
@@ -43,6 +44,8 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
   const [activeTab, setActiveTab] = useState<'siswa' | 'guru'>('siswa');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTahun, setFilterTahun] = useState('SEMUA');
+  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
+  const [masterSyncStatus, setMasterSyncStatus] = useState('');
 
   // Master Data State
   const [siswaList, setSiswaList] = useState<MasterSiswaItem[]>(() => getStoredMasterSiswa());
@@ -242,6 +245,24 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
               <span className="hidden sm:inline">Export CSV</span>
             </button>
 
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSyncingMaster(true);
+                setMasterSyncStatus('Sedang mencatat master data ke Google Spreadsheet...');
+                const res = await syncMasterToGoogleSheet();
+                setIsSyncingMaster(false);
+                setMasterSyncStatus(res.success ? `✓ ${res.message}` : `⚠️ ${res.message}`);
+                setTimeout(() => setMasterSyncStatus(''), 5000);
+              }}
+              disabled={isSyncingMaster}
+              className="px-3.5 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
+              title="Tulis seluruh data siswa & guru ke tab DATA_MASTER_SISWA dan DATA_MASTER_GURU di Google Spreadsheet"
+            >
+              <ExternalLink className={`w-3.5 h-3.5 ${isSyncingMaster ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isSyncingMaster ? 'Menyinkronkan...' : 'Kirim ke Spreadsheet'}</span>
+            </button>
+
             {(siswaList.length > 0 || guruList.length > 0) ? (
               <button
                 type="button"
@@ -290,6 +311,12 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
           </div>
         </div>
       </div>
+
+      {masterSyncStatus && (
+        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold animate-fadeIn flex items-center gap-2">
+          <span>{masterSyncStatus}</span>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">

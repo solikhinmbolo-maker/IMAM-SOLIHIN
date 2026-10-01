@@ -183,39 +183,101 @@ export default function App() {
   const handleCopyGAS = () => {
     const code = `// ================================================================
 // GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM
+// Database Terpusat: Google Drive & Google Spreadsheet
 // ================================================================
 
-// 1. JALANKAN FUNGSI INI SEKALI (KLIK RUN/JALANKAN) DI EDITOR APPS SCRIPT:
-// Berfungsi untuk mengizinkan hak akses Google Sheet dan otomatis
-// membuat 4 Tab: REKAP_SEMUA_ARSIP, ARSIP_SISWA, ARSIP_GURU, ARSIP_LAINNYA
+// 1. JALANKAN FUNGSI INI SEKALI (KLIK TOMBOL RUN/JALANKAN DI APPS SCRIPT)
+// Berfungsi menyiapkan 6 TAB DATABASE LENGKAP di Spreadsheet Anda:
+// • DATA_MASTER_SISWA
+// • DATA_MASTER_GURU
+// • REKAP_SEMUA_ARSIP
+// • ARSIP_SISWA
+// • ARSIP_GURU
+// • ARSIP_LAINNYA
 function setupDatabaseDanIzin() {
   var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-  var ss = SpreadsheetApp.openById(sheetId);
-  var headers = [
+  var ss;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
+  } catch(e) {
+    ss = SpreadsheetApp.openById(sheetId);
+  }
+
+  // Header Master Siswa
+  getOrCreateSheet(ss, 'DATA_MASTER_SISWA', [
+    'NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR'
+  ]);
+
+  // Header Master Guru & PTK
+  getOrCreateSheet(ss, 'DATA_MASTER_GURU', [
+    'NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR'
+  ]);
+
+  // Header Arsip Dokumen
+  var headersArsip = [
     'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
     'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
     'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
   ];
-  getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
-  getOrCreateSheet(ss, 'ARSIP_SISWA', headers);
-  getOrCreateSheet(ss, 'ARSIP_GURU', headers);
-  getOrCreateSheet(ss, 'ARSIP_LAINNYA', headers);
-  Logger.log('BERHASIL! 4 Tab database telah otomatis disiapkan di: ' + ss.getName());
+  getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
+
+  Logger.log('BERHASIL! 6 Tab database telah otomatis disiapkan di Spreadsheet: ' + ss.getName());
 }
 
-// 2. WEBHOOK OTOMATIS SAAT ADA DOKUMEN DIUNGGAH DARI APLIKASI WEB
+// 2. WEBHOOK PENERIMA UPLOAD & DATA DARI APLIKASI WEB
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var rootFolderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
     var sheetId = data.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-    
-    // -------------------------------------------------------------
-    // A. SIMPAN FILE KE SUBFOLDER GOOGLE DRIVE OTOMATIS
-    // -------------------------------------------------------------
-    var rootFolder = DriveApp.getFolderById(rootFolderId);
+    var ss;
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
+    } catch(eOpen) {
+      ss = SpreadsheetApp.openById(sheetId);
+    }
 
-    // Kategori Utama: 1. ARSIP SISWA / 2. ARSIP GURU / 3. ARSIP LAINNYA
+    // A. JIKA ACTION ADALAH SINKRONISASI MASTER SISWA / GURU
+    if (data.action === 'SYNC_ALL_MASTER') {
+      if (data.siswaList && data.siswaList.length > 0) {
+        var sheetSiswa = getOrCreateSheet(ss, 'DATA_MASTER_SISWA', [
+          'NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR'
+        ]);
+        var existingSiswa = sheetSiswa.getDataRange().getValues();
+        var existingNisns = existingSiswa.map(function(row) { return String(row[0]).trim(); });
+        
+        data.siswaList.forEach(function(s) {
+          if (existingNisns.indexOf(String(s.nisn).trim()) === -1) {
+            sheetSiswa.appendRow([s.nisn, s.nama, s.tahun, s.kelas, new Date().toLocaleDateString('id-ID')]);
+          }
+        });
+      }
+
+      if (data.guruList && data.guruList.length > 0) {
+        var sheetGuru = getOrCreateSheet(ss, 'DATA_MASTER_GURU', [
+          'NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR'
+        ]);
+        var existingGuru = sheetGuru.getDataRange().getValues();
+        var existingNuptks = existingGuru.map(function(row) { return String(row[0]).trim(); });
+
+        data.guruList.forEach(function(g) {
+          if (existingNuptks.indexOf(String(g.nuptk).trim()) === -1) {
+            sheetGuru.appendRow([g.nuptk, g.nama, g.jabatan, new Date().toLocaleDateString('id-ID')]);
+          }
+        });
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Master Siswa & Guru berhasil disinkronkan ke Spreadsheet!'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // B. PROSES SIMPAN BERKAS FISIK KE GOOGLE DRIVE
+    var rootFolder = DriveApp.getFolderById(rootFolderId);
     var subfolderName = '3. ARSIP LAINNYA';
     if (data.kategoriUtama === 'Arsip Siswa') {
       subfolderName = '1. ARSIP SISWA';
@@ -224,13 +286,11 @@ function doPost(e) {
     }
     var categoryFolder = getOrCreateFolder(rootFolder, subfolderName);
     
-    // Subfolder Angkatan untuk Siswa
     var targetFolder = categoryFolder;
     if (data.tahun && data.tahun !== '-') {
       targetFolder = getOrCreateFolder(categoryFolder, 'Angkatan ' + data.tahun);
     }
 
-    // Buat & Simpan File Fisik
     var fileUrl = '-';
     if (data.fileData && data.fileData.indexOf('base64,') > -1) {
       var split = data.fileData.split('base64,');
@@ -244,11 +304,8 @@ function doPost(e) {
       fileUrl = file.getUrl();
     }
 
-    // -------------------------------------------------------------
-    // B. SIMPAN REKAP BARIS KE GOOGLE SPREADSHEET OTOMATIS
-    // -------------------------------------------------------------
-    var ss = SpreadsheetApp.openById(sheetId);
-    var headers = [
+    // C. PROSES TULIS BARIS REKAP KE GOOGLE SPREADSHEET
+    var headersArsip = [
       'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
       'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
       'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
@@ -268,19 +325,36 @@ function doPost(e) {
       fileUrl
     ];
 
-    // 1. Simpan ke Tab Utama 'REKAP_SEMUA_ARSIP'
-    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
+    // 1. Tulis ke Tab REKAP_SEMUA_ARSIP
+    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
     sheetSemua.appendRow(rowData);
 
-    // 2. Simpan juga ke Tab Kategori
+    // 2. Tulis ke Tab Kategori Khusus (ARSIP_SISWA / ARSIP_GURU / ARSIP_LAINNYA)
     var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
-    var sheetKategori = getOrCreateSheet(ss, tabName, headers);
+    var sheetKategori = getOrCreateSheet(ss, tabName, headersArsip);
     sheetKategori.appendRow(rowData);
+
+    // 3. Otomatis Catat ke DATA_MASTER_SISWA / DATA_MASTER_GURU jika belum ada
+    if (data.kategoriUtama === 'Arsip Siswa' && data.subjek && data.identitas) {
+      var sMaster = getOrCreateSheet(ss, 'DATA_MASTER_SISWA', ['NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR']);
+      var sVals = sMaster.getDataRange().getValues();
+      var sNisns = sVals.map(function(r) { return String(r[0]).trim(); });
+      if (sNisns.indexOf(String(data.identitas).trim()) === -1) {
+        sMaster.appendRow([data.identitas, data.subjek, data.tahun || '-', '9A', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
+      }
+    } else if (data.kategoriUtama === 'Arsip Guru' && data.subjek && data.identitas) {
+      var gMaster = getOrCreateSheet(ss, 'DATA_MASTER_GURU', ['NUPTK / NIP', 'NAMA LENGKAP GURU & PTK', 'JABATAN / MAPEL', 'TANGGAL TERDAFTAR']);
+      var gVals = gMaster.getDataRange().getValues();
+      var gNuptks = gVals.map(function(r) { return String(r[0]).trim(); });
+      if (gNuptks.indexOf(String(data.identitas).trim()) === -1) {
+        gMaster.appendRow([data.identitas, data.subjek, 'Guru Pengajar', Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy')]);
+      }
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       driveUrl: fileUrl,
-      message: 'Berhasil diarsipkan ke Google Drive & Sheet!'
+      message: 'Berhasil tersimpan di Google Drive & tertulis di Google Spreadsheet!'
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
@@ -291,12 +365,11 @@ function doPost(e) {
   }
 }
 
-// Helper: Cari atau Buat Subfolder Otomatis di Google Drive (Aman saat di-run manual)
+// Helper: Cari atau Buat Subfolder Otomatis di Google Drive
 function getOrCreateFolder(parent, name) {
   if (!parent) {
     parent = DriveApp.getFolderById('1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x');
   }
-  if (!name) name = '1. ARSIP SISWA';
   var folders = parent.getFoldersByName(name);
   if (folders.hasNext()) {
     return folders.next();
@@ -304,19 +377,8 @@ function getOrCreateFolder(parent, name) {
   return parent.createFolder(name);
 }
 
-// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap (Aman saat di-run manual)
+// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap
 function getOrCreateSheet(ss, name, headers) {
-  if (!ss) {
-    ss = SpreadsheetApp.openById('1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE');
-  }
-  if (!name) name = 'REKAP_SEMUA_ARSIP';
-  if (!headers) {
-    headers = [
-      'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
-      'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
-      'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
-    ];
-  }
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     var defaultSheet = ss.getSheetByName('Sheet1') || ss.getSheetByName('Sheet 1');
@@ -339,10 +401,17 @@ function getOrCreateSheet(ss, name, headers) {
   return sheet;
 }
 
+// 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET KE APLIKASI WEB
 function doGet(e) {
   try {
     var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
-    var ss = SpreadsheetApp.openById(sheetId);
+    var ss;
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(sheetId);
+    } catch(eOpen) {
+      ss = SpreadsheetApp.openById(sheetId);
+    }
+
     var sheet = ss.getSheetByName('REKAP_SEMUA_ARSIP');
     if (!sheet) {
       return ContentService.createTextOutput(JSON.stringify({
@@ -350,6 +419,7 @@ function doGet(e) {
         items: []
       })).setMimeType(ContentService.MimeType.JSON);
     }
+
     var rows = sheet.getDataRange().getValues();
     var items = [];
     for (var i = 1; i < rows.length; i++) {
@@ -370,6 +440,7 @@ function doGet(e) {
         });
       }
     }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       count: items.length,
