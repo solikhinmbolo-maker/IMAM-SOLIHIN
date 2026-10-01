@@ -46,7 +46,9 @@ import {
   saveStoredSyncConfig, 
   GoogleSyncConfig,
   clearAllArsipData,
-  restoreSampleArsipData 
+  restoreSampleArsipData,
+  getStoredArsip,
+  syncItemToGoogleCloud
 } from './data/mockDatabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
@@ -181,8 +183,27 @@ export default function App() {
   const handleCopyGAS = () => {
     const code = `// ================================================================
 // GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM
-// FITUR OTOMATIS: BUAT SUBFOLDER DRIVE & MULTI-TAB SHEET OTOMATIS
 // ================================================================
+
+// 1. JALANKAN FUNGSI INI SEKALI (KLIK RUN/JALANKAN) DI EDITOR APPS SCRIPT:
+// Berfungsi untuk mengizinkan hak akses Google Sheet dan otomatis
+// membuat 4 Tab: REKAP_SEMUA_ARSIP, ARSIP_SISWA, ARSIP_GURU, ARSIP_LAINNYA
+function setupDatabaseDanIzin() {
+  var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+  var ss = SpreadsheetApp.openById(sheetId);
+  var headers = [
+    'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
+    'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
+    'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
+  ];
+  getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
+  getOrCreateSheet(ss, 'ARSIP_SISWA', headers);
+  getOrCreateSheet(ss, 'ARSIP_GURU', headers);
+  getOrCreateSheet(ss, 'ARSIP_LAINNYA', headers);
+  Logger.log('BERHASIL! 4 Tab database telah otomatis disiapkan di: ' + ss.getName());
+}
+
+// 2. WEBHOOK OTOMATIS SAAT ADA DOKUMEN DIUNGGAH DARI APLIKASI WEB
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -190,33 +211,26 @@ function doPost(e) {
     var sheetId = data.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
     
     // -------------------------------------------------------------
-    // 1. OTOMATISASI STRUKTUR FOLDER DI GOOGLE DRIVE
+    // A. SIMPAN FILE KE SUBFOLDER GOOGLE DRIVE OTOMATIS
     // -------------------------------------------------------------
-    var rootFolder;
-    try {
-      rootFolder = DriveApp.getFolderById(rootFolderId);
-    } catch (err) {
-      rootFolder = DriveApp.getRootFolder();
-    }
+    var rootFolder = DriveApp.getFolderById(rootFolderId);
 
-    // Tentukan Nama Subfolder Kategori Utama
+    // Kategori Utama: 1. ARSIP SISWA / 2. ARSIP GURU / 3. ARSIP LAINNYA
     var subfolderName = '3. ARSIP LAINNYA';
     if (data.kategoriUtama === 'Arsip Siswa') {
       subfolderName = '1. ARSIP SISWA';
     } else if (data.kategoriUtama === 'Arsip Guru') {
       subfolderName = '2. ARSIP GURU & PTK';
     }
-
-    // Buat subfolder kategori utama otomatis jika belum ada
     var categoryFolder = getOrCreateFolder(rootFolder, subfolderName);
     
-    // Jika arsip siswa, otomatis buatkan subfolder Angkatan
+    // Subfolder Angkatan untuk Siswa
     var targetFolder = categoryFolder;
     if (data.tahun && data.tahun !== '-') {
       targetFolder = getOrCreateFolder(categoryFolder, 'Angkatan ' + data.tahun);
     }
 
-    // Simpan File Fisik Asli ke dalam Folder yang Tepat
+    // Buat & Simpan File Fisik
     var fileUrl = '-';
     if (data.fileData && data.fileData.indexOf('base64,') > -1) {
       var split = data.fileData.split('base64,');
@@ -231,57 +245,37 @@ function doPost(e) {
     }
 
     // -------------------------------------------------------------
-    // 2. OTOMATISASI STRUKTUR SHEET/TAB DI GOOGLE SPREADSHEET
+    // B. SIMPAN REKAP BARIS KE GOOGLE SPREADSHEET OTOMATIS
     // -------------------------------------------------------------
-    var ss = null;
-    try {
-      ss = SpreadsheetApp.getActiveSpreadsheet();
-    } catch (eActive) {}
-
-    if (!ss && sheetId) {
-      try {
-        ss = SpreadsheetApp.openById(sheetId.toString().trim());
-      } catch (eId) {}
-    }
-
-    if (!ss) {
-      try {
-        var sheetFiles = rootFolder.getFilesByType(MimeType.GOOGLE_SHEETS);
-        if (sheetFiles.hasNext()) {
-          ss = SpreadsheetApp.open(sheetFiles.next());
-        }
-      } catch (eFolder) {}
-    }
-    
+    var ss = SpreadsheetApp.openById(sheetId);
     var headers = [
       'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
       'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
       'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
     ];
 
-    if (ss) {
-      // 1. Simpan ke Tab Utama 'REKAP_SEMUA_ARSIP'
-      var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
-      var rowData = [
-        data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
-        data.tanggal || Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss'),
-        data.tahun || '-',
-        data.identitas || '-',
-        data.subjek || '-',
-        data.kategori || '-',
-        data.kategoriUtama || 'Arsip Siswa',
-        data.namaFile || '-',
-        data.ukuran || '-',
-        data.uploader || 'Admin',
-        fileUrl
-      ];
-      sheetSemua.appendRow(rowData);
+    var rowData = [
+      data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
+      data.tanggal || Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss'),
+      data.tahun || '-',
+      data.identitas || '-',
+      data.subjek || '-',
+      data.kategori || '-',
+      data.kategoriUtama || 'Arsip Siswa',
+      data.namaFile || '-',
+      data.ukuran || '-',
+      data.uploader || 'Admin',
+      fileUrl
+    ];
 
-      // 2. Otomatis catat juga ke tab kategori masing-masing
-      var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
-      var sheetKategori = getOrCreateSheet(ss, tabName, headers);
-      sheetKategori.appendRow(rowData);
-    }
+    // 1. Simpan ke Tab Utama 'REKAP_SEMUA_ARSIP'
+    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
+    sheetSemua.appendRow(rowData);
+
+    // 2. Simpan juga ke Tab Kategori
+    var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
+    var sheetKategori = getOrCreateSheet(ss, tabName, headers);
+    sheetKategori.appendRow(rowData);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -306,11 +300,10 @@ function getOrCreateFolder(parent, name) {
   return parent.createFolder(name);
 }
 
-// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Profesional
+// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap
 function getOrCreateSheet(ss, name, headers) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    // Jika masih ada Sheet1 bawaan yang kosong, pakai dan ganti namanya
     var defaultSheet = ss.getSheetByName('Sheet1') || ss.getSheetByName('Sheet 1');
     if (defaultSheet && defaultSheet.getLastRow() === 0) {
       defaultSheet.setName(name);
@@ -363,6 +356,39 @@ function doGet(e) {
     } finally {
       setIsTestingConn(false);
     }
+  };
+
+  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
+  const [bulkSyncStatus, setBulkSyncStatus] = useState('');
+
+  const handleBulkSyncToSheet = async () => {
+    if (!syncConfig.webhookUrl) {
+      alert('⚠️ Mohon masukkan URL Webhook terlebih dahulu!');
+      return;
+    }
+    const items = getStoredArsip();
+    if (items.length === 0) {
+      alert('Tidak ada arsip untuk disinkronkan. Unggah dokumen terlebih dahulu.');
+      return;
+    }
+
+    setIsBulkSyncing(true);
+    setBulkSyncStatus(`Menyinkronkan 0/${items.length} berkas ke Spreadsheet...`);
+    let successCount = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      setBulkSyncStatus(`Mengirim baris (${i + 1}/${items.length}): ${items[i].subjek}...`);
+      try {
+        const res = await syncItemToGoogleCloud(items[i]);
+        if (res.success) successCount++;
+      } catch (e) {
+        console.warn('Sync item failed:', items[i].id, e);
+      }
+    }
+
+    setIsBulkSyncing(false);
+    setBulkSyncStatus(`✅ Berhasil menyinkronkan ${successCount} dari ${items.length} berkas ke Spreadsheet!`);
+    setTimeout(() => setBulkSyncStatus(''), 7000);
   };
 
   const handleSaveSettings = () => {
@@ -1243,16 +1269,40 @@ function doGet(e) {
                 </div>
 
                 {syncConfig.webhookUrl && (
-                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
-                    <button
-                      type="button"
-                      onClick={handleTestConnection}
-                      disabled={isTestingConn}
-                      className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
-                    >
-                      {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
-                    </button>
+                  <>
+                    <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
+                      <button
+                        type="button"
+                        onClick={handleTestConnection}
+                        disabled={isTestingConn}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
+                      >
+                        {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <strong className="text-xs text-emerald-900 block font-bold">Sinkronkan Berkas ke Spreadsheet</strong>
+                        <span className="text-[10px] text-emerald-700">Kirim ulang berkas lokal yang belum tercatat ke tabel Sheet</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBulkSyncToSheet}
+                        disabled={isBulkSyncing}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isBulkSyncing ? 'animate-spin' : ''}`} />
+                        <span>{isBulkSyncing ? 'Menyinkronkan...' : 'Kirim Semua ke Sheet'}</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {bulkSyncStatus && (
+                  <div className="p-2.5 bg-emerald-50 rounded-xl text-[11px] font-semibold text-emerald-800 border border-emerald-300 animate-fadeIn">
+                    {bulkSyncStatus}
                   </div>
                 )}
 

@@ -9,7 +9,8 @@ import {
   Eye, 
   Award, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Maximize2
 } from 'lucide-react';
 import { ArsipItem, getFileAttachment, getStoredSyncConfig } from '../data/mockDatabase';
 
@@ -20,9 +21,34 @@ interface PreviewModalProps {
   onDownload: (item: ArsipItem) => void;
 }
 
+// Convert base64 data URI to standard Blob Object URL for Chromium PDF rendering
+function convertDataUriToBlobUrl(dataUrl: string): string {
+  try {
+    if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl;
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return dataUrl;
+    
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/pdf';
+    
+    const byteCharacters = atob(parts[1]);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    console.error('Error creating Blob URL for PDF preview:', err);
+    return dataUrl;
+  }
+}
+
 export default function PreviewModal({ item, onClose, onPrint, onDownload }: PreviewModalProps) {
   const [activeTab, setActiveTab] = useState<'file' | 'certificate'>('file');
   const [fileData, setFileData] = useState<string>('');
+  const [blobUrl, setBlobUrl] = useState<string>('');
   const [isLoadingFile, setIsLoadingFile] = useState(false);
 
   const syncConfig = getStoredSyncConfig();
@@ -31,7 +57,6 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
   useEffect(() => {
     if (!item) return;
 
-    // Reset tab to file
     setActiveTab('file');
 
     if (item.fileDataUrl) {
@@ -47,7 +72,6 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
           setFileData(data);
         } else {
           setFileData('');
-          // If no physical file (e.g. initial demo items), default to certificate
           setActiveTab('certificate');
         }
       })
@@ -60,12 +84,45 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
       });
   }, [item]);
 
+  // Generate Blob URL whenever fileData changes
+  useEffect(() => {
+    if (!fileData) {
+      setBlobUrl('');
+      return;
+    }
+
+    if (fileData.startsWith('data:')) {
+      const url = convertDataUriToBlobUrl(fileData);
+      setBlobUrl(url);
+      return () => {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      };
+    } else {
+      setBlobUrl(fileData);
+    }
+  }, [fileData]);
+
   if (!item) return null;
 
-  const isPdf = fileData.startsWith('data:application/pdf') || 
+  const isPdf = (fileData && fileData.startsWith('data:application/pdf')) || 
+                (blobUrl && blobUrl.startsWith('blob:')) ||
                 (item.namaFileAsli && item.namaFileAsli.toLowerCase().endsWith('.pdf'));
-  const isImage = fileData.startsWith('data:image') || 
+
+  const isImage = (fileData && fileData.startsWith('data:image')) || 
                   (item.namaFileAsli && /\.(jpe?g|png|webp|gif|bmp)$/i.test(item.namaFileAsli));
+
+  const handleOpenFullscreen = () => {
+    if (blobUrl) {
+      window.open(blobUrl, '_blank');
+    } else if (fileData) {
+      const win = window.open();
+      if (win) {
+        win.document.write(`<iframe src="${fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+      }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn font-['Poppins']">
@@ -119,6 +176,17 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {activeTab === 'file' && (blobUrl || fileData) && (
+              <button
+                onClick={handleOpenFullscreen}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                title="Buka Dokumen di Tab Penuh"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Layar Penuh</span>
+              </button>
+            )}
+
             <button
               onClick={() => onPrint(item)}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
@@ -148,7 +216,7 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
         </div>
 
         {/* Content Viewer Body */}
-        <div className="flex-1 bg-slate-950 p-2 sm:p-5 overflow-y-auto flex items-center justify-center relative">
+        <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-y-auto flex items-center justify-center relative">
           
           {isLoadingFile ? (
             <div className="flex flex-col items-center gap-3 text-slate-400 py-16">
@@ -159,30 +227,43 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
             /* ============================================================== */
             /* 1. TAMPILAN BERKAS ASLI (PDF / GAMBAR)                          */
             /* ============================================================== */
-            fileData ? (
-              isPdf ? (
-                <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl">
-                  <iframe
-                    src={fileData}
-                    className="w-full h-full min-h-[70vh] border-0 rounded-2xl bg-white"
-                    title={item.namaFileAsli || 'Dokumen PDF'}
-                  />
-                </div>
-              ) : isImage ? (
+            (blobUrl || fileData) ? (
+              isImage ? (
                 <div className="w-full h-full flex items-center justify-center p-2 overflow-auto">
                   <img
-                    src={fileData}
+                    src={fileData || blobUrl}
                     alt={item.namaFileAsli}
                     className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-700"
                   />
                 </div>
               ) : (
-                <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-slate-700 bg-white">
-                  <iframe
-                    src={fileData}
-                    className="w-full h-full min-h-[70vh] border-0"
-                    title={item.namaFileAsli}
-                  />
+                /* PDF Viewer using Blob URL with object fallback for Chromium */
+                <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl relative min-h-[75vh]">
+                  <object
+                    data={blobUrl || fileData}
+                    type="application/pdf"
+                    className="w-full h-full min-h-[75vh] rounded-2xl bg-white border-0"
+                  >
+                    <iframe
+                      src={blobUrl || fileData}
+                      className="w-full h-full min-h-[75vh] border-0 rounded-2xl bg-white"
+                      title={item.namaFileAsli || 'Dokumen PDF'}
+                    >
+                      <div className="flex flex-col items-center justify-center p-12 text-slate-800 bg-white h-full space-y-4">
+                        <FileText className="w-16 h-16 text-blue-600" />
+                        <h4 className="font-bold text-base">Dokumen PDF Siap Ditampilkan</h4>
+                        <p className="text-xs text-slate-500 max-w-sm text-center">
+                          Browser Anda memerlukan izin untuk membuka pratinjau PDF langsung di dalam frame.
+                        </p>
+                        <button
+                          onClick={handleOpenFullscreen}
+                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                        >
+                          Buka PDF di Tab Baru
+                        </button>
+                      </div>
+                    </iframe>
+                  </object>
                 </div>
               )
             ) : (
