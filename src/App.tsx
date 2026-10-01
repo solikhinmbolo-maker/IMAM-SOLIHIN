@@ -25,7 +25,9 @@ import {
   Clock,
   Copy,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
@@ -42,7 +44,9 @@ import {
   DB_KEYS, 
   getStoredSyncConfig, 
   saveStoredSyncConfig, 
-  GoogleSyncConfig 
+  GoogleSyncConfig,
+  clearAllArsipData,
+  restoreSampleArsipData 
 } from './data/mockDatabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
@@ -172,54 +176,92 @@ export default function App() {
   const [copiedGAS, setCopiedGAS] = useState(false);
   const [testConnStatus, setTestConnStatus] = useState<string>('');
   const [isTestingConn, setIsTestingConn] = useState(false);
+  const [dbVersion, setDbVersion] = useState(0);
 
   const handleCopyGAS = () => {
     const code = `// ================================================================
-// GOOGLE APPS SCRIPT WEBHOOK UNTUK E-ARSIP SMP AL-HIKAM
+// GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM
+// FITUR OTOMATIS: BUAT SUBFOLDER DRIVE & MULTI-TAB SHEET OTOMATIS
 // ================================================================
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
-    var folderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
+    var rootFolderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
     var sheetId = data.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
     
-    // 1. Simpan File Fisik ke Google Drive
+    // -------------------------------------------------------------
+    // 1. OTOMATISASI STRUKTUR FOLDER DI GOOGLE DRIVE
+    // -------------------------------------------------------------
+    var rootFolder;
+    try {
+      rootFolder = DriveApp.getFolderById(rootFolderId);
+    } catch (err) {
+      rootFolder = DriveApp.getRootFolder();
+    }
+
+    // Tentukan Nama Subfolder Kategori Utama
+    var subfolderName = '3. ARSIP LAINNYA';
+    if (data.kategoriUtama === 'Arsip Siswa') {
+      subfolderName = '1. ARSIP SISWA';
+    } else if (data.kategoriUtama === 'Arsip Guru') {
+      subfolderName = '2. ARSIP GURU & PTK';
+    }
+
+    // Buat subfolder kategori utama otomatis jika belum ada
+    var categoryFolder = getOrCreateFolder(rootFolder, subfolderName);
+    
+    // Jika arsip siswa, otomatis buatkan subfolder Angkatan
+    var targetFolder = categoryFolder;
+    if (data.tahun && data.tahun !== '-') {
+      targetFolder = getOrCreateFolder(categoryFolder, 'Angkatan ' + data.tahun);
+    }
+
+    // Simpan File Fisik Asli ke dalam Folder yang Tepat
     var fileUrl = '-';
     if (data.fileData && data.fileData.indexOf('base64,') > -1) {
       var split = data.fileData.split('base64,');
       var contentType = split[0].split(':')[1].split(';')[0];
       var bytes = Utilities.base64Decode(split[1]);
-      var blob = Utilities.newBlob(bytes, contentType, data.namaFile || 'arsip_dokumen.pdf');
+      var cleanFileName = (data.subjek ? data.subjek + ' - ' : '') + (data.kategori || 'Dokumen') + ' - ' + (data.namaFile || 'arsip.pdf');
+      var blob = Utilities.newBlob(bytes, contentType, cleanFileName);
       
-      var folder;
-      try {
-        folder = DriveApp.getFolderById(folderId);
-      } catch (err) {
-        folder = DriveApp.getRootFolder();
-      }
-      
-      var file = folder.createFile(blob);
+      var file = targetFolder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       fileUrl = file.getUrl();
     }
 
-    // 2. Simpan Rekap Baris ke Google Spreadsheet
+    // -------------------------------------------------------------
+    // 2. OTOMATISASI STRUKTUR SHEET/TAB DI GOOGLE SPREADSHEET
+    // -------------------------------------------------------------
     var ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getActiveSheet();
     
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        'ID ARSIP', 'TANGGAL', 'TAHUN', 'IDENTITAS (NISN/NUPTK)', 
-        'NAMA SUBJEK', 'KATEGORI', 'KATEGORI UTAMA', 'NAMA FILE', 
-        'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
-      ]);
-    }
+    var headers = [
+      'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
+      'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
+      'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
+    ];
 
-    sheet.appendRow([
-      data.id, data.tanggal, data.tahun, data.identitas,
-      data.subjek, data.kategori, data.kategoriUtama, data.namaFile,
-      data.ukuran, data.uploader, fileUrl
-    ]);
+    // Otomatis buat Sheet 'REKAP_SEMUA_ARSIP' jika belum ada
+    var sheetSemua = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headers);
+    var rowData = [
+      data.id || ('ARS-' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd-HHmmss')),
+      data.tanggal || Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss'),
+      data.tahun || '-',
+      data.identitas || '-',
+      data.subjek || '-',
+      data.kategori || '-',
+      data.kategoriUtama || 'Arsip Siswa',
+      data.namaFile || '-',
+      data.ukuran || '-',
+      data.uploader || 'Admin',
+      fileUrl
+    ];
+    sheetSemua.appendRow(rowData);
+
+    // Otomatis catat juga ke tab kategori masing-masing
+    var tabName = data.kategoriUtama === 'Arsip Siswa' ? 'ARSIP_SISWA' : data.kategoriUtama === 'Arsip Guru' ? 'ARSIP_GURU' : 'ARSIP_LAINNYA';
+    var sheetKategori = getOrCreateSheet(ss, tabName, headers);
+    sheetKategori.appendRow(rowData);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -233,6 +275,33 @@ function doPost(e) {
       message: error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// Helper: Cari atau Buat Subfolder Otomatis di Google Drive
+function getOrCreateFolder(parent, name) {
+  var folders = parent.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return parent.createFolder(name);
+}
+
+// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Profesional
+function getOrCreateSheet(ss, name, headers) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    var range = sheet.getRange(1, 1, 1, headers.length);
+    range.setFontWeight('bold').setBackground('#0F172A').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    for (var i = 1; i <= headers.length; i++) {
+      sheet.autoResizeColumn(i);
+    }
+  }
+  return sheet;
 }
 
 function doGet(e) {
@@ -700,6 +769,7 @@ function doGet(e) {
         <div className="p-3.5 sm:p-8 pt-[82px] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
           {activePage === 'dashboard' && (
             <DashboardView
+              key={dbVersion}
               onNavigate={(page, sub) => {
                 setActivePage(page);
                 if (sub) setActiveSubKategori(sub);
@@ -1168,6 +1238,44 @@ function doGet(e) {
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-[11px] leading-relaxed">
                 ✓ <strong>Mode Fleksibel:</strong> Jika Webhook belum disetel, aplikasi tetap menyimpan dokumen secara lokal di IndexedDB agar arsip tidak pernah hilang. Saat Webhook sudah disetel, file fisik otomatis terunggah ke Google Drive Anda!
+              </div>
+
+              {/* Basis Data Control: Kosongkan Demo / Mulai dari 0 */}
+              <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <strong className="text-xs text-rose-900 block font-bold">Status Data E-Arsip Sekolah</strong>
+                    <span className="text-[11px] text-rose-700">
+                      Bersihkan 13 data arsip contoh demo agar Dashboard mulai bersih dari angka 0.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Kosongkan semua data arsip demo agar dashboard mulai dari angka 0?')) {
+                          clearAllArsipData();
+                          setDbVersion(v => v + 1);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Kosongkan Data (Mulai dari 0)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        restoreSampleArsipData();
+                        setDbVersion(v => v + 1);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 hover:bg-rose-100/60 font-semibold text-xs cursor-pointer"
+                      title="Muat Ulang Contoh Data Demo"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
 
             </div>

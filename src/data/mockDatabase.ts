@@ -407,7 +407,7 @@ function safeSetItem(key: string, value: string) {
 export function getStoredArsip(): ArsipItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
-    if (!raw) {
+    if (raw === null) {
       safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
       return INITIAL_ARSIP;
     }
@@ -420,7 +420,7 @@ export function getStoredArsip(): ArsipItem[] {
       return item;
     });
   } catch {
-    return INITIAL_ARSIP;
+    return [];
   }
 }
 
@@ -907,6 +907,22 @@ export async function syncItemToGoogleCloud(
     return { success: false, message: err.message || 'Gagal mengirim ke Google Apps Script.' };
   }
 }
+
+/**
+ * Clear all sample demo archives to start fresh from 0
+ */
+export function clearAllArsipData(): void {
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify([]));
+  fileBlobCache.clear();
+}
+
+/**
+ * Restore sample initial archives for demonstration
+ */
+export function restoreSampleArsipData(): void {
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
+}
+
 
 
 
