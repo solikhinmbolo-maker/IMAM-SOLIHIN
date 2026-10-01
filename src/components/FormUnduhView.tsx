@@ -11,9 +11,10 @@ import {
   CloudDownload, 
   FileText,
   User,
-  ChevronDown
+  ChevronDown,
+  RefreshCw
 } from 'lucide-react';
-import { ArsipItem, getStoredArsip } from '../data/mockDatabase';
+import { ArsipItem, getStoredArsip, fetchLiveArsipFromGoogle } from '../data/mockDatabase';
 
 interface FormUnduhViewProps {
   kategoriMenu?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -30,6 +31,8 @@ export default function FormUnduhView({
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadingItemName, setDownloadingItemName] = useState('');
+  const [isSyncingFromGoogle, setIsSyncingFromGoogle] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
 
   // Get data
   const allArsip = getStoredArsip();
@@ -123,11 +126,42 @@ export default function FormUnduhView({
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold self-start sm:self-auto">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Mode Unduh Langsung</span>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={async () => {
+              setIsSyncingFromGoogle(true);
+              setSyncStatus('Memperbarui dari Google Sheet...');
+              const res = await fetchLiveArsipFromGoogle();
+              setIsSyncingFromGoogle(false);
+              if (res.success) {
+                setSyncStatus(`✓ Berhasil diperbarui (${res.items?.length || 0} berkas)`);
+                setTimeout(() => setSyncStatus(''), 4000);
+              } else {
+                setSyncStatus(`Info: ${res.message}`);
+                setTimeout(() => setSyncStatus(''), 4000);
+              }
+            }}
+            disabled={isSyncingFromGoogle}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold cursor-pointer active:scale-95 transition-all"
+            title="Ambil data terbaru langsung dari Google Spreadsheet"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFromGoogle ? 'animate-spin text-emerald-600' : ''}`} />
+            <span>{isSyncingFromGoogle ? 'Memperbarui...' : 'Sinkronkan dari Google Sheet'}</span>
+          </button>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Mode Unduh Langsung</span>
+          </div>
         </div>
       </div>
+
+      {syncStatus && (
+        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-medium animate-fadeIn">
+          {syncStatus}
+        </div>
+      )}
 
       {/* FILTER BERTINGKAT & SMART SEARCH */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-3.5 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-5">

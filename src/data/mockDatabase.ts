@@ -894,7 +894,7 @@ export async function syncItemToGoogleCloud(
       return {
         success: true,
         driveUrl: realUrl,
-        message: 'Tersinkronisasi otomatis ke Google Drive & Google Sheet'
+        message: 'Tersimpan otomatis ke Google Drive & dicatat di Google Sheet'
       };
     } else {
       return {
@@ -905,6 +905,40 @@ export async function syncItemToGoogleCloud(
   } catch (err: any) {
     console.warn('Sync to Google Cloud error:', err);
     return { success: false, message: err.message || 'Gagal mengirim ke Google Apps Script.' };
+  }
+}
+
+/**
+ * Fetch live archives directly from Google Spreadsheet / Drive via Webhook
+ */
+export async function fetchLiveArsipFromGoogle(): Promise<{ success: boolean; items?: ArsipItem[]; message?: string }> {
+  const config = getStoredSyncConfig();
+  if (!config.webhookUrl) {
+    return { success: false, message: 'URL Webhook belum diatur di Pengaturan Google Cloud' };
+  }
+  try {
+    const response = await fetch(`${config.webhookUrl}?action=getArsip&t=${Date.now()}`);
+    const data = await response.json();
+    if (data && data.status === 'success' && Array.isArray(data.items)) {
+      const items: ArsipItem[] = data.items.map((it: any) => ({
+        id: it.id || `ARS-${Date.now()}`,
+        tanggal: it.tanggal || new Date().toLocaleDateString('id-ID'),
+        tahun: it.tahun || '-',
+        identitas: it.identitas || '-',
+        subjek: it.subjek || '-',
+        kategori: it.kategori || '-',
+        kategoriUtama: (it.kategoriUtama as any) || 'Arsip Siswa',
+        namaFileAsli: it.namaFile || it.namaFileAsli || 'Dokumen',
+        ukuran: it.ukuran || '0 KB',
+        uploader: it.uploader || 'Admin',
+        linkDrive: it.driveUrl || it.linkDrive || '#'
+      }));
+      safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(items));
+      return { success: true, items };
+    }
+    return { success: false, message: data?.message || 'Gagal memuat data' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal terhubung ke Google Apps Script' };
   }
 }
 

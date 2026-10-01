@@ -1121,27 +1121,58 @@ export default function FormUploadView({
         </div>
       )}
 
-      {/* Success Modal */}
+      {/* Success Modal with Animated Green Checkmark & Selesai Button */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp border border-slate-100">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 shadow-[0_0_25px_rgba(16,185,129,0.3)]">
-              <CheckCircle2 className="w-8 h-8" />
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp border border-emerald-100">
+            {/* Animated Glowing Green Checkmark Icon */}
+            <div className="relative flex items-center justify-center mx-auto mb-5 w-20 h-20">
+              <div className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping" />
+              <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center shadow-[0_0_35px_rgba(16,185,129,0.5)]">
+                <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
             </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold mb-2 border border-emerald-200/80">
+              <span>✓ Google Drive & Sheet Terhubung</span>
+            </div>
+
             <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-1.5">Pengarsipan Berhasil!</h3>
             <p className="text-xs text-slate-600 mb-6 leading-relaxed">
-              Sebanyak <strong>{successInfo.count} berkas dokumen</strong> milik <strong>{successInfo.name}</strong> telah berhasil disimpan ke Google Drive dan tercatat di database E-Arsip.
+              Sebanyak <strong>{successInfo.count} berkas dokumen</strong> milik <strong>{successInfo.name}</strong> telah berhasil disimpan ke <strong>Google Drive</strong> dan dicatat di <strong>Google Spreadsheet</strong>.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowSuccessModal(false);
-                onUploadSuccess();
-              }}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-colors cursor-pointer"
-            >
-              Lihat di Daftar Unduh
-            </button>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  setSelectedFile(null);
+                  setFileBase64('');
+                  setKolektifFiles({});
+                  setNamaDokumen('');
+                  setErrorMessage('');
+                  // Keep user on the upload page ready for next upload
+                }}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-600/30 transition-all transform active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Selesai (Upload Dokumen Baru)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  onUploadSuccess();
+                }}
+                className="w-full py-2.5 text-slate-500 hover:text-slate-800 text-xs font-semibold hover:underline transition-all cursor-pointer"
+              >
+                Buka Menu Unduh Dokumen →
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -340,10 +340,48 @@ function getOrCreateSheet(ss, name, headers) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'online',
-    message: 'Webhook E-Arsip SMP Al-Hikam Aktif!'
-  })).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+    var ss = SpreadsheetApp.openById(sheetId);
+    var sheet = ss.getSheetByName('REKAP_SEMUA_ARSIP');
+    if (!sheet) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        items: []
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var rows = sheet.getDataRange().getValues();
+    var items = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i];
+      if (r[0] && String(r[0]).trim() !== '') {
+        items.push({
+          id: String(r[0]),
+          tanggal: String(r[1]),
+          tahun: String(r[2]),
+          identitas: String(r[3]),
+          subjek: String(r[4]),
+          kategori: String(r[5]),
+          kategoriUtama: String(r[6]),
+          namaFile: String(r[7]),
+          ukuran: String(r[8]),
+          uploader: String(r[9]),
+          driveUrl: String(r[10])
+        });
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      count: items.length,
+      items: items
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString(),
+      items: []
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }`;
 
     navigator.clipboard.writeText(code);
@@ -361,8 +399,8 @@ function doGet(e) {
     try {
       const res = await fetch(syncConfig.webhookUrl);
       const data = await res.json();
-      if (data && data.status === 'online') {
-        setTestConnStatus('✅ Terhubung! Webhook Google Apps Script aktif & online.');
+      if (data && data.status === 'success') {
+        setTestConnStatus(`✅ Terhubung! Webhook aktif & mendeteksi ${data.count || 0} arsip di Spreadsheet.`);
       } else {
         setTestConnStatus('✅ Terhubung ke Webhook Google Apps Script!');
       }
@@ -371,39 +409,6 @@ function doGet(e) {
     } finally {
       setIsTestingConn(false);
     }
-  };
-
-  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
-  const [bulkSyncStatus, setBulkSyncStatus] = useState('');
-
-  const handleBulkSyncToSheet = async () => {
-    if (!syncConfig.webhookUrl) {
-      alert('⚠️ Mohon masukkan URL Webhook terlebih dahulu!');
-      return;
-    }
-    const items = getStoredArsip();
-    if (items.length === 0) {
-      alert('Tidak ada arsip untuk disinkronkan. Unggah dokumen terlebih dahulu.');
-      return;
-    }
-
-    setIsBulkSyncing(true);
-    setBulkSyncStatus(`Menyinkronkan 0/${items.length} berkas ke Spreadsheet...`);
-    let successCount = 0;
-
-    for (let i = 0; i < items.length; i++) {
-      setBulkSyncStatus(`Mengirim baris (${i + 1}/${items.length}): ${items[i].subjek}...`);
-      try {
-        const res = await syncItemToGoogleCloud(items[i]);
-        if (res.success) successCount++;
-      } catch (e) {
-        console.warn('Sync item failed:', items[i].id, e);
-      }
-    }
-
-    setIsBulkSyncing(false);
-    setBulkSyncStatus(`✅ Berhasil menyinkronkan ${successCount} dari ${items.length} berkas ke Spreadsheet!`);
-    setTimeout(() => setBulkSyncStatus(''), 7000);
   };
 
   const handleSaveSettings = () => {
@@ -1284,40 +1289,16 @@ function doGet(e) {
                 </div>
 
                 {syncConfig.webhookUrl && (
-                  <>
-                    <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
-                      <button
-                        type="button"
-                        onClick={handleTestConnection}
-                        disabled={isTestingConn}
-                        className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
-                      >
-                        {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
-                      </button>
-                    </div>
-
-                    <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <strong className="text-xs text-emerald-900 block font-bold">Sinkronkan Berkas ke Spreadsheet</strong>
-                        <span className="text-[10px] text-emerald-700">Kirim ulang berkas lokal yang belum tercatat ke tabel Sheet</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleBulkSyncToSheet}
-                        disabled={isBulkSyncing}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isBulkSyncing ? 'animate-spin' : ''}`} />
-                        <span>{isBulkSyncing ? 'Menyinkronkan...' : 'Kirim Semua ke Sheet'}</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {bulkSyncStatus && (
-                  <div className="p-2.5 bg-emerald-50 rounded-xl text-[11px] font-semibold text-emerald-800 border border-emerald-300 animate-fadeIn">
-                    {bulkSyncStatus}
+                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={isTestingConn}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
+                    >
+                      {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
+                    </button>
                   </div>
                 )}
 
@@ -1329,7 +1310,7 @@ function doGet(e) {
               </div>
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-[11px] leading-relaxed">
-                ✓ <strong>Mode Fleksibel:</strong> Jika Webhook belum disetel, aplikasi tetap menyimpan dokumen secara lokal di IndexedDB agar arsip tidak pernah hilang. Saat Webhook sudah disetel, file fisik otomatis terunggah ke Google Drive Anda!
+                ✓ <strong>Otomatis Real-Time:</strong> Setiap kali dokumen diunggah, berkas fisik langsung tersimpan ke <strong>Google Drive</strong> dan datanya otomatis tertulis di baris <strong>Google Spreadsheet</strong>.
               </div>
 
               {/* Basis Data Control: Kosongkan Demo / Mulai dari 0 */}
