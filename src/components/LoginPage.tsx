@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { email: string; name: string; role: string }) => void;
+  sessionNotice?: string;
 }
 
-export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
+export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPageProps) {
   const [email, setEmail] = useState('admin@alhicam.sch.id');
-  const [password, setPassword] = useState('alhicam2026');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -96,6 +97,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">Sistem Informasi Manajemen Digital SMP Al-Hikam</p>
           <div className="h-0.5 w-12 bg-gradient-to-r from-transparent via-cyan-400 to-transparent mx-auto mt-2" />
         </div>
+
+        {/* Session Timeout Alert */}
+        {sessionNotice && (
+          <div className="mb-3.5 p-3 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-xs flex items-start gap-2.5 animate-fadeIn">
+            <Clock className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <span className="leading-snug">{sessionNotice}</span>
+          </div>
+        )}
 
         {/* Success Alert */}
         {resetSuccessMsg && (

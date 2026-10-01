@@ -1,0 +1,22 @@
+{
+  "short_name": "E-Arsip",
+  "name": "E-Arsip Digital SMP Al-Hikam",
+  "icons": [
+    {
+      "src": "https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0F172A",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/"
+}

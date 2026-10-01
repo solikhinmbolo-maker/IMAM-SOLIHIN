@@ -21,7 +21,8 @@ import {
   FileText,
   BookOpen,
   Stamp,
-  History
+  History,
+  Clock
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
@@ -68,19 +69,76 @@ function LiveClock() {
   return <span>{timeStr || 'Memuat waktu...'}</span>;
 }
 
+// 30 Minutes Inactivity Timeout in milliseconds (30 * 60 * 1000)
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
 export default function App() {
-  // Auth state
+  // Session expired notice message
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string>('');
+
+  // Auth state: Default MUST LOGIN FIRST (null) unless there is a fresh session verified within 30 min
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string; role: string } | null>(() => {
     try {
       const saved = localStorage.getItem(DB_KEYS.AUTH_USER);
-      if (saved) return JSON.parse(saved);
+      const lastActive = localStorage.getItem('EARSIP_LAST_ACTIVE_TIME');
+      if (saved && lastActive) {
+        const timeDiff = Date.now() - parseInt(lastActive, 10);
+        if (timeDiff < INACTIVITY_TIMEOUT_MS) {
+          return JSON.parse(saved);
+        }
+      }
     } catch {}
-    return {
-      email: 'admin@alhicam.sch.id',
-      name: 'Solikhin Mbolo',
-      role: 'Super Administrator'
-    };
+    // Security by default: Always require login when opened fresh
+    return null;
   });
+
+  const [lastActiveTime, setLastActiveTime] = useState<number>(Date.now());
+
+  // Real-time Inactivity Auto-Logout Tracker (30 Menit)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const recordActivity = () => {
+      const now = Date.now();
+      setLastActiveTime(now);
+      localStorage.setItem('EARSIP_LAST_ACTIVE_TIME', now.toString());
+    };
+
+    // User activity events: mouse movement, keystroke, touch, click, scroll
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    let lastThrottledTime = Date.now();
+
+    const handleUserActivity = () => {
+      const now = Date.now();
+      // Throttle event updating every 4 seconds to prevent CPU overhead
+      if (now - lastThrottledTime > 4000) {
+        lastThrottledTime = now;
+        recordActivity();
+      }
+    };
+
+    events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+    // Periodic check every 10 seconds whether 30 minutes of inactivity has passed
+    const timerInterval = setInterval(() => {
+      const savedLast = localStorage.getItem('EARSIP_LAST_ACTIVE_TIME');
+      const lastTime = savedLast ? parseInt(savedLast, 10) : lastActiveTime;
+      const elapsed = Date.now() - lastTime;
+
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        // Automatically logout user after 30 minutes idle
+        localStorage.removeItem(DB_KEYS.AUTH_USER);
+        localStorage.removeItem('EARSIP_LAST_ACTIVE_TIME');
+        setCurrentUser(null);
+        setSessionExpiredNotice('⚠️ Sesi Anda telah kedaluwarsa otomatis karena tidak ada aktivitas selama 30 menit demi keamanan sistem. Silakan login kembali.');
+      }
+    }, 10000);
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+      clearInterval(timerInterval);
+    };
+  }, [currentUser, lastActiveTime]);
 
   // Navigation State
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
@@ -102,19 +160,24 @@ export default function App() {
 
   const handleLoginSuccess = (user: { email: string; name: string; role: string }) => {
     setCurrentUser(user);
+    const now = Date.now();
     localStorage.setItem(DB_KEYS.AUTH_USER, JSON.stringify(user));
+    localStorage.setItem('EARSIP_LAST_ACTIVE_TIME', now.toString());
+    setSessionExpiredNotice('');
     setActivePage('dashboard');
   };
 
   const handleLogout = () => {
     localStorage.removeItem(DB_KEYS.AUTH_USER);
+    localStorage.removeItem('EARSIP_LAST_ACTIVE_TIME');
     setCurrentUser(null);
     setShowLogoutModal(false);
     setMobileProfileSheetOpen(false);
+    setSessionExpiredNotice('');
   };
 
   if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    return <LoginPage onLoginSuccess={handleLoginSuccess} sessionNotice={sessionExpiredNotice} />;
   }
 
   // Titles mapping
@@ -410,7 +473,13 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4 sm:gap-5">
+            {/* 30-Min Idle Protection Indicator */}
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Proteksi Sesi 30 Menit Aktif</span>
+            </div>
+
             <button
               onClick={() => setShowLogoutModal(true)}
               className="flex flex-col items-center justify-center text-red-400 hover:text-red-300 transition-transform active:scale-95 cursor-pointer group"
