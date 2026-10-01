@@ -291,8 +291,12 @@ function doPost(e) {
   }
 }
 
-// Helper: Cari atau Buat Subfolder Otomatis di Google Drive
+// Helper: Cari atau Buat Subfolder Otomatis di Google Drive (Aman saat di-run manual)
 function getOrCreateFolder(parent, name) {
+  if (!parent) {
+    parent = DriveApp.getFolderById('1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x');
+  }
+  if (!name) name = '1. ARSIP SISWA';
   var folders = parent.getFoldersByName(name);
   if (folders.hasNext()) {
     return folders.next();
@@ -300,8 +304,19 @@ function getOrCreateFolder(parent, name) {
   return parent.createFolder(name);
 }
 
-// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap
+// Helper: Cari atau Buat Tab Sheet Otomatis dengan Format Biru Gelap (Aman saat di-run manual)
 function getOrCreateSheet(ss, name, headers) {
+  if (!ss) {
+    ss = SpreadsheetApp.openById('1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE');
+  }
+  if (!name) name = 'REKAP_SEMUA_ARSIP';
+  if (!headers) {
+    headers = [
+      'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
+      'NAMA SUBJEK', 'KATEGORI DOKUMEN', 'KATEGORI UTAMA', 'NAMA FILE ASLI', 
+      'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
+    ];
+  }
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     var defaultSheet = ss.getSheetByName('Sheet1') || ss.getSheetByName('Sheet 1');
