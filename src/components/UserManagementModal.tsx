@@ -6,10 +6,7 @@ import {
   Edit3, 
   Trash2, 
   ShieldCheck, 
-  Check, 
-  Save, 
   Camera, 
-  RefreshCw, 
   Lock, 
   Eye, 
   EyeOff, 
@@ -17,15 +14,16 @@ import {
   User, 
   CheckCircle2, 
   AlertCircle,
-  ArrowLeft
+  ArrowLeft,
+  Save
 } from 'lucide-react';
 import { addAuditLog } from '../data/mockDatabase';
-import { saveUserProfileToSupabase } from '../supabase';
+import { syncAllUsersToSupabase } from '../supabase';
 
 export interface SystemUser {
   id: string;
   name: string;
-  email: string;
+  email: string; // Used as username/email
   role: string;
   status: 'Aktif' | 'Nonaktif';
   password?: string;
@@ -35,26 +33,13 @@ export interface SystemUser {
 
 export const INITIAL_SYSTEM_USERS: SystemUser[] = [
   { 
-    id: 'usr-1', 
+    id: 'master-superadmin', 
     name: 'Solikhin Mbolo', 
-    email: 'admin@alhicam.sch.id', 
+    email: 'superadmin', 
     role: 'Super Administrator', 
     status: 'Aktif', 
+    password: 'superadmin123',
     isSuperAdmin: true 
-  },
-  { 
-    id: 'usr-2', 
-    name: 'Operator Tata Usaha', 
-    email: 'solikhin@alhicam.sch.id', 
-    role: 'Administrator Arsip', 
-    status: 'Aktif' 
-  },
-  { 
-    id: 'usr-3', 
-    name: 'Nurul Hidayah, S.Kom', 
-    email: 'nurul@alhicam.sch.id', 
-    role: 'Admin Guru & TIK', 
-    status: 'Aktif' 
   }
 ];
 
@@ -67,7 +52,37 @@ export function getStoredUserList(): SystemUser[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      // Pastikan akun utama Solikhin Mbolo (superadmin) selalu ada dan menjadi master
+      const masterIdx = parsed.findIndex(u => u.id === 'master-superadmin' || u.email?.toLowerCase() === 'superadmin');
+      
+      // Bersihkan duplikasi dan akun demo lama yang sudah tidak dipakai
+      const cleanedOtherUsers = parsed
+        .filter((u, index) => {
+          if (u.id === 'master-superadmin' || u.email?.toLowerCase() === 'superadmin') return false;
+          // Filter akun demo default lama
+          if (['admin@alhicam.sch.id', 'solikhin@alhicam.sch.id', 'nurul@alhicam.sch.id'].includes(u.email?.toLowerCase())) return false;
+          // Filter duplikasi username
+          return parsed.findIndex(item => item.email?.toLowerCase() === u.email?.toLowerCase()) === index;
+        })
+        .map(u => ({ ...u, isSuperAdmin: false }));
+
+      let masterUser: SystemUser;
+      if (masterIdx >= 0) {
+        masterUser = {
+          ...INITIAL_SYSTEM_USERS[0],
+          name: parsed[masterIdx].name || 'Solikhin Mbolo',
+          email: 'superadmin',
+          password: parsed[masterIdx].password || 'superadmin123',
+          avatarUrl: parsed[masterIdx].avatarUrl || INITIAL_SYSTEM_USERS[0].avatarUrl,
+          isSuperAdmin: true
+        };
+      } else {
+        masterUser = INITIAL_SYSTEM_USERS[0];
+      }
+
+      const finalList = [masterUser, ...cleanedOtherUsers];
+      localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(finalList));
+      return finalList;
     }
     return INITIAL_SYSTEM_USERS;
   } catch {
@@ -94,45 +109,10 @@ export default function UserManagementModal({
   currentUser,
   onUpdateCurrentUser
 }: UserManagementModalProps) {
-  const [users, setUsers] = useState<SystemUser[]>(() => {
-    const list = getStoredUserList();
-    // Synchronize current superadmin account if present
-    const updated = list.map(u => {
-      if (u.isSuperAdmin || u.email === currentUser.email) {
-        return {
-          ...u,
-          name: currentUser.name,
-          email: currentUser.email,
-          role: currentUser.role,
-          avatarUrl: currentUser.avatarUrl || u.avatarUrl
-        };
-      }
-      return u;
-    });
-    return updated;
-  });
+  const [users, setUsers] = useState<SystemUser[]>(() => getStoredUserList());
 
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      const list = getStoredUserList();
-      const updated = list.map(u => {
-        if (u.isSuperAdmin || u.email.toLowerCase() === currentUser.email.toLowerCase()) {
-          return {
-            ...u,
-            name: currentUser.name,
-            email: currentUser.email,
-            role: currentUser.role,
-            avatarUrl: currentUser.avatarUrl || u.avatarUrl
-          };
-        }
-        return u;
-      });
-      setUsers(updated);
-    }
-  }, [isOpen, currentUser]);
 
   // Form states for editing / creating
   const [formName, setFormName] = useState('');
@@ -146,6 +126,26 @@ export default function UserManagementModal({
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Refresh user list every time modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      const list = getStoredUserList();
+      // Sync active session avatar/name to master user only
+      const synced = list.map(u => {
+        if (u.id === 'master-superadmin' || u.email.toLowerCase() === 'superadmin') {
+          return {
+            ...u,
+            name: currentUser.name || u.name,
+            avatarUrl: currentUser.avatarUrl || u.avatarUrl
+          };
+        }
+        return u;
+      });
+      setUsers(synced);
+      saveStoredUserList(synced);
+    }
+  }, [isOpen, currentUser]);
+
   if (!isOpen) return null;
 
   const handleStartEdit = (user: SystemUser) => {
@@ -155,7 +155,7 @@ export default function UserManagementModal({
     setFormEmail(user.email);
     setFormRole(user.role);
     setFormStatus(user.status);
-    setFormPassword('');
+    setFormPassword(user.password || '');
     setFormAvatar(user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=2563eb&color=fff&size=120`);
     setMessage(null);
   };
@@ -191,11 +191,11 @@ export default function UserManagementModal({
     reader.onload = (evt) => {
       const dataUrl = evt.target?.result as string;
       if (dataUrl) {
-        // Compress avatar image using in-memory HTML5 Canvas to keep storage lightweight (~15KB)
+        // Compress avatar image using HTML5 Canvas to keep storage lightweight (~15KB)
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxDim = 320; // 320x320 optimal square profile size
+          const maxDim = 300;
           let w = img.width;
           let h = img.height;
           if (w > maxDim || h > maxDim) {
@@ -236,12 +236,12 @@ export default function UserManagementModal({
       return;
     }
     if (!cleanEmail) {
-      setMessage({ type: 'error', text: 'Email atau Username login wajib diisi.' });
+      setMessage({ type: 'error', text: 'Username / Email login wajib diisi.' });
       return;
     }
 
     if (isCreatingNew && !formPassword) {
-      setMessage({ type: 'error', text: 'Password wajib diisi untuk pengguna baru.' });
+      setMessage({ type: 'error', text: 'Password wajib diisi untuk akun baru.' });
       return;
     }
 
@@ -250,16 +250,19 @@ export default function UserManagementModal({
       return;
     }
 
-    // Check duplicate email
-    const duplicate = users.find(u => u.email.toLowerCase() === cleanEmail && (!editingUser || u.id !== editingUser.id));
+    // Cek duplikasi username (kecuali user yang sedang diedit)
+    const duplicate = users.find(u => 
+      u.email.toLowerCase() === cleanEmail && (!editingUser || u.id !== editingUser.id)
+    );
     if (duplicate) {
-      setMessage({ type: 'error', text: `Email ${cleanEmail} sudah digunakan oleh akun lain.` });
+      setMessage({ type: 'error', text: `Username "${cleanEmail}" sudah digunakan oleh akun lain.` });
       return;
     }
 
     let updatedList: SystemUser[];
 
     if (isCreatingNew) {
+      // 1. TAMBAH AKUN BARU (Tidak akan pernah merubah akun Solikhin Mbolo / master)
       const newUser: SystemUser = {
         id: `usr-${Date.now()}`,
         name: cleanName,
@@ -268,8 +271,9 @@ export default function UserManagementModal({
         status: formStatus,
         password: formPassword,
         avatarUrl: formAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=2563eb&color=fff&size=120`,
-        isSuperAdmin: formRole === 'Super Administrator'
+        isSuperAdmin: false // Hanya Solikhin Mbolo yang master superadmin
       };
+
       updatedList = [...users, newUser];
 
       addAuditLog({
@@ -281,16 +285,9 @@ export default function UserManagementModal({
         status: 'SUCCESS'
       });
 
-      // Simpan ke Supabase users
-      saveUserProfileToSupabase({
-        email: cleanEmail,
-        name: cleanName,
-        role: formRole,
-        avatarUrl: newUser.avatarUrl
-      }).catch(() => {});
-
     } else if (editingUser) {
-      const isCurrentActiveUser = editingUser.email.toLowerCase() === currentUser.email.toLowerCase() || editingUser.isSuperAdmin;
+      // 2. EDIT AKUN SPESIFIK BERDASARKAN ID
+      const isMasterAdmin = editingUser.id === 'master-superadmin' || editingUser.email.toLowerCase() === 'superadmin';
 
       updatedList = users.map(u => {
         if (u.id === editingUser.id) {
@@ -298,36 +295,33 @@ export default function UserManagementModal({
             ...u,
             name: cleanName,
             email: cleanEmail,
-            role: formRole,
-            status: formStatus,
+            role: isMasterAdmin ? 'Super Administrator' : formRole,
+            status: isMasterAdmin ? 'Aktif' : formStatus,
             avatarUrl: formAvatar,
-            ...(formPassword ? { password: formPassword } : {})
+            password: formPassword || u.password
           };
         }
         return u;
       });
 
-      // Jika yang diedit adalah akun diri sendiri yang sedang login (Superadmin):
-      if (isCurrentActiveUser) {
+      // Jika yang diedit adalah akun master Solikhin Mbolo (Superadmin) yang sedang aktif:
+      if (isMasterAdmin) {
         const updatedSelf = {
           name: cleanName,
           email: cleanEmail,
-          role: formRole,
+          role: 'Super Administrator',
           avatarUrl: formAvatar
         };
 
         onUpdateCurrentUser(updatedSelf);
 
-        // Update kredensial admin login di localStorage
-        const adminAccRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
-        const adminAcc = adminAccRaw ? JSON.parse(adminAccRaw) : {};
+        // Update akun admin login di localStorage
         const newAdminAcc = {
-          ...adminAcc,
           name: cleanName,
           email: cleanEmail,
-          role: formRole,
+          role: 'Super Administrator',
           avatarUrl: formAvatar,
-          ...(formPassword ? { password: formPassword } : {})
+          password: formPassword || 'superadmin123'
         };
         localStorage.setItem('EARSIP_ADMIN_ACCOUNT', JSON.stringify(newAdminAcc));
       }
@@ -336,18 +330,10 @@ export default function UserManagementModal({
         aksi: 'UPDATE',
         kategori: 'Manajemen Pengguna',
         subjek: cleanName,
-        detail: `Pembaruan akun ${cleanName} (${cleanEmail} - ${formRole})${formPassword ? ' & ganti kata sandi' : ''}`,
+        detail: `Pembaruan akun ${cleanName} (${cleanEmail} - ${formRole})`,
         operator: currentUser.email,
         status: 'SUCCESS'
       });
-
-      // Simpan ke Supabase users
-      saveUserProfileToSupabase({
-        email: cleanEmail,
-        name: cleanName,
-        role: formRole,
-        avatarUrl: formAvatar
-      }).catch(() => {});
     } else {
       return;
     }
@@ -355,15 +341,18 @@ export default function UserManagementModal({
     setUsers(updatedList);
     saveStoredUserList(updatedList);
 
+    // Sinkronkan ke database Supabase
+    syncAllUsersToSupabase(updatedList).catch(() => {});
+
     setMessage({ type: 'success', text: `✓ Akun ${cleanName} berhasil disimpan dan disinkronkan ke sistem!` });
     setTimeout(() => {
       handleCancelForm();
-    }, 800);
+    }, 700);
   };
 
   const handleDeleteUser = (user: SystemUser) => {
-    if (user.isSuperAdmin || user.email === currentUser.email) {
-      alert('Akun Super Administrator utama tidak dapat dihapus demi keamanan sistem!');
+    if (user.id === 'master-superadmin' || user.email === 'superadmin' || user.isSuperAdmin) {
+      alert('Akun Super Administrator Utama tidak dapat dihapus demi keamanan sistem!');
       return;
     }
 
@@ -375,11 +364,14 @@ export default function UserManagementModal({
     setUsers(filtered);
     saveStoredUserList(filtered);
 
+    // Sinkronkan perubahan penghapusan ke Supabase
+    syncAllUsersToSupabase(filtered).catch(() => {});
+
     addAuditLog({
       aksi: 'DELETE',
       kategori: 'Manajemen Pengguna',
       subjek: user.name,
-      detail: `Penghapusan akun pengguna: ${user.name} (${user.email})`,
+      detail: `Penghapusan akun: ${user.name} (${user.email})`,
       operator: currentUser.email,
       status: 'WARNING'
     });
@@ -520,14 +512,14 @@ export default function UserManagementModal({
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-cyan-400" />
-                  Email / Username Login
+                  Username / ID Login
                 </label>
                 <input
                   type="text"
                   required
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="Contoh: fatma@01 atau admin@alhicam.sch.id"
+                  placeholder="User Name"
                   className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
@@ -541,8 +533,9 @@ export default function UserManagementModal({
                   </label>
                   <select
                     value={formRole}
+                    disabled={editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
                     onChange={(e) => setFormRole(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60"
                   >
                     <option value="Super Administrator">Super Administrator (Akses Penuh)</option>
                     <option value="Administrator Arsip">Administrator Arsip</option>
@@ -558,8 +551,9 @@ export default function UserManagementModal({
                   </label>
                   <select
                     value={formStatus}
+                    disabled={editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
                     onChange={(e) => setFormStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60"
                   >
                     <option value="Aktif">Aktif (Bisa Login)</option>
                     <option value="Nonaktif">Nonaktif (Ditangguhkan)</option>
@@ -572,7 +566,7 @@ export default function UserManagementModal({
                 <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5 text-amber-400" />
-                    {isCreatingNew ? 'Kata Sandi / Password *' : 'Ganti Password (Kosongkan jika tidak diubah)'}
+                    {isCreatingNew ? 'Kata Sandi / Password *' : 'Kata Sandi / Password'}
                   </span>
                 </label>
                 <div className="relative">
@@ -580,7 +574,7 @@ export default function UserManagementModal({
                     type={showPassword ? 'text' : 'password'}
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
-                    placeholder={isCreatingNew ? 'Minimal 6 karakter' : 'Masukkan password baru jika ingin diganti'}
+                    placeholder="Masukkan password akun"
                     className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 pr-10"
                   />
                   <button
@@ -635,13 +629,14 @@ export default function UserManagementModal({
 
               {/* Users Cards */}
               {users.map((u) => {
-                const isCurrent = u.email.toLowerCase() === currentUser.email.toLowerCase() || u.isSuperAdmin;
+                // Tentukan hanya 1 akun yang merupakan Anda (Master Super Administrator)
+                const isAnda = u.id === 'master-superadmin' || u.email.toLowerCase() === 'superadmin' || u.email.toLowerCase() === currentUser.email.toLowerCase();
 
                 return (
                   <div 
                     key={u.id}
                     className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                      isCurrent 
+                      isAnda 
                         ? 'bg-gradient-to-r from-blue-950/60 to-slate-900 border-blue-500/40 shadow-sm shadow-blue-500/10' 
                         : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
                     }`}
@@ -655,13 +650,15 @@ export default function UserManagementModal({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <strong className="text-xs sm:text-sm font-bold text-white truncate">{u.name}</strong>
-                          {isCurrent && (
+                          {isAnda && (
                             <span className="px-1.5 py-0.2 bg-blue-500/20 text-cyan-300 border border-blue-500/40 rounded text-[9px] font-bold">
                               Anda
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-slate-400 font-mono block truncate">{u.email}</span>
+                        <span className="text-[11px] text-slate-400 font-mono block truncate">
+                          @{u.email}
+                        </span>
                       </div>
                     </div>
 
@@ -681,12 +678,12 @@ export default function UserManagementModal({
                           type="button"
                           onClick={() => handleStartEdit(u)}
                           className="p-2 rounded-xl bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm group"
-                          title={`Edit Data ${u.name}`}
+                          title={`Edit Akun ${u.name}`}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
 
-                        {!u.isSuperAdmin && u.email !== currentUser.email && (
+                        {u.id !== 'master-superadmin' && u.email !== 'superadmin' && (
                           <button
                             type="button"
                             onClick={() => handleDeleteUser(u)}

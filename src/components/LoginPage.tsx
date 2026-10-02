@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
+import { getStoredUserList } from './UserManagementModal';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { email: string; name: string; role: string; avatarUrl?: string }) => void;
@@ -7,7 +8,7 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPageProps) {
-  const [email, setEmail] = useState('admin@alhicam.sch.id');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -29,102 +30,49 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
     const cleanInput = email.trim().toLowerCase();
 
     if (!cleanInput || !password) {
-      setErrorMessage('Silakan isi Email / Username dan Password terlebih dahulu.');
+      setErrorMessage('Silakan isi Username dan Password terlebih dahulu.');
       return;
     }
 
     setLoading(true);
 
-    // 1. Ambil seluruh akun dari EARSIP_USER_LIST
-    let userList: any[] = [];
-    try {
-      const storedListRaw = localStorage.getItem('EARSIP_USER_LIST');
-      if (storedListRaw) {
-        userList = JSON.parse(storedListRaw);
-      }
-    } catch {}
-
-    // Default users jika belum ada di localStorage
-    if (!Array.isArray(userList) || userList.length === 0) {
-      userList = [
-        { id: 'usr-1', name: 'Solikhin Mbolo', email: 'admin@alhicam.sch.id', role: 'Super Administrator', status: 'Aktif', password: 'alhicam2026', isSuperAdmin: true },
-        { id: 'usr-2', name: 'Operator Tata Usaha', email: 'solikhin@alhicam.sch.id', role: 'Administrator Arsip', status: 'Aktif', password: 'alhicam2026' },
-        { id: 'usr-3', name: 'Nurul Hidayah, S.Kom', email: 'nurul@alhicam.sch.id', role: 'Admin Guru & TIK', status: 'Aktif', password: 'alhicam2026' }
-      ];
-    }
-
-    // 2. Cek juga akun admin yang tersimpan di EARSIP_ADMIN_ACCOUNT
-    const customAdminRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
-    let customAdmin: any = null;
-    if (customAdminRaw) {
-      try { customAdmin = JSON.parse(customAdminRaw); } catch {}
-    }
+    // 1. Ambil seluruh akun resmi dari database lokal / sistem
+    const userList = getStoredUserList();
 
     setTimeout(() => {
       setLoading(false);
 
-      // Cari kecocokan di user list (berdasarkan email atau username)
+      // Cari kecocokan akun
       const matchedUser = userList.find((u: any) => {
         const uEmail = (u.email || '').trim().toLowerCase();
-        const uName = (u.name || '').trim().toLowerCase();
-        return uEmail === cleanInput || uName === cleanInput || (cleanInput === 'admin' && (u.isSuperAdmin || uEmail === 'admin@alhicam.sch.id'));
+        return uEmail === cleanInput || (cleanInput === 'superadmin' && (u.id === 'master-superadmin' || u.isSuperAdmin));
       });
 
-      // Jika akun ditemukan di daftar pengguna sistem
+      // Validasi akun
       if (matchedUser) {
         if (matchedUser.status === 'Nonaktif') {
-          setErrorMessage('Akun Anda sedang dinonaktifkan. Hubungi Super Administrator.');
+          setErrorMessage('Akun Anda sedang dinonaktifkan oleh Super Administrator.');
           return;
         }
 
-        // Tentukan password yang valid untuk akun ini
-        let validPassword = matchedUser.password;
-        if (!validPassword) {
-          if (matchedUser.isSuperAdmin && customAdmin?.password) {
-            validPassword = customAdmin.password;
-          } else {
-            validPassword = 'alhicam2026';
-          }
-        }
+        const validPassword = matchedUser.password || 'superadmin123';
 
-        if (password === validPassword || password === 'alhicam2026') {
+        if (password === validPassword) {
           onLoginSuccess({
             email: matchedUser.email,
             name: matchedUser.name,
             role: matchedUser.role,
-            avatarUrl: matchedUser.avatarUrl || (matchedUser.isSuperAdmin ? customAdmin?.avatarUrl : undefined)
+            avatarUrl: matchedUser.avatarUrl
           });
+          return;
+        } else {
+          setErrorMessage('Password salah! Periksa kembali kata sandi Anda.');
           return;
         }
       }
 
-      // Cek fallback admin akun kustom
-      if (customAdmin) {
-        const adminEmail = (customAdmin.email || 'admin@alhicam.sch.id').trim().toLowerCase();
-        const adminPass = customAdmin.password || 'alhicam2026';
-        if ((cleanInput === adminEmail || cleanInput === 'admin' || cleanInput === 'admin@alhicam.sch.id') && (password === adminPass || password === 'alhicam2026')) {
-          onLoginSuccess({
-            email: adminEmail,
-            name: customAdmin.name || 'Solikhin Mbolo',
-            role: customAdmin.role || 'Super Administrator',
-            avatarUrl: customAdmin.avatarUrl
-          });
-          return;
-        }
-      }
-
-      // Default fallback
-      if ((cleanInput === 'admin@alhicam.sch.id' || cleanInput === 'solikhin@alhicam.sch.id' || cleanInput === 'admin') && password === 'alhicam2026') {
-        onLoginSuccess({
-          email: cleanInput,
-          name: 'Solikhin Mbolo',
-          role: 'Super Administrator'
-        });
-        return;
-      }
-
-      setErrorMessage('Email / Username atau Password salah! Periksa kembali data login Anda.');
-    }, 500);
+      setErrorMessage('Username tidak terdaftar! Hanya akun resmi yang diizinkan masuk.');
+    }, 400);
   };
 
   const handleKirimReset = (e: React.FormEvent) => {
@@ -208,7 +156,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@alhicam.sch.id"
+                placeholder="User Name"
                 required
                 className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/80 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-xs sm:text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all font-medium"
               />
@@ -281,7 +229,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
         {/* Compact Default Credentials Pill */}
         <div className="mt-3.5 p-2 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-[10px] sm:text-[11px] text-cyan-300 text-center flex items-center justify-center gap-1.5">
           <KeyRound className="w-3 h-3 text-cyan-400 flex-shrink-0" />
-          <span>Demo: <strong className="text-white">admin@alhicam.sch.id</strong> / <strong className="text-white">alhicam2026</strong></span>
+          <span>Akun Utama: <strong className="text-white font-mono">superadmin</strong> / <strong className="text-white font-mono">superadmin123</strong></span>
         </div>
 
         {/* Divider */}

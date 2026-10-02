@@ -176,12 +176,13 @@ export default function EditProfileModal({
         try {
           const list = JSON.parse(currentListRaw);
           const updatedUserList = list.map((u: any) => {
-            if (u.isSuperAdmin || u.email.toLowerCase() === cleanEmail || u.email.toLowerCase() === currentUser.email.toLowerCase()) {
+            if (u.id === 'master-superadmin' || u.email.toLowerCase() === currentUser.email.toLowerCase()) {
               return {
                 ...u,
                 name: cleanName,
                 email: cleanEmail,
-                avatarUrl: avatarUrl
+                avatarUrl: avatarUrl,
+                ...(password ? { password: password } : {})
               };
             }
             return u;
@@ -344,11 +345,11 @@ export default function EditProfileModal({
                 Email / Username Login
               </label>
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@alhicam.sch.id"
+                placeholder="User Name"
                 className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
               />
             </div>

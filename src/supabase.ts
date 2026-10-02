@@ -614,6 +614,58 @@ export function subscribeToSupabaseArsip(onUpdate: (items: ArsipItem[]) => void)
 }
 
 /**
+ * Sync entire user list to Supabase 'users' table
+ */
+export async function syncAllUsersToSupabase(users: Array<{ id: string; name: string; email: string; role: string; status: string; password?: string; avatarUrl?: string }>): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(users) || users.length === 0) return false;
+
+  try {
+    const rows = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      username: (u.email || '').trim().toLowerCase(),
+      role: u.role,
+      status: u.status,
+      password: u.password || null,
+      avatar_url: u.avatarUrl || null,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await client.from('users').upsert(rows, { onConflict: 'username' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch users from Supabase
+ */
+export async function fetchUsersFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client.from('users').select('*').order('created_at', { ascending: true });
+    if (error || !Array.isArray(data) || data.length === 0) return null;
+
+    return data.map((d: any) => ({
+      id: d.id || `usr-${d.username}`,
+      name: d.name || 'Pengguna',
+      email: d.username || d.email || '',
+      role: d.role || 'Staf',
+      status: d.status || 'Aktif',
+      password: d.password,
+      avatarUrl: d.avatar_url,
+      isSuperAdmin: d.role === 'Super Administrator'
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ready-to-use SQL Schema for Supabase SQL Editor
  */
 export const SUPABASE_SQL_SCHEMA = `-- =========================================================
@@ -633,7 +685,7 @@ CREATE TABLE IF NOT EXISTS public.arsip (
     nama_file_asli TEXT,
     ukuran TEXT,
     link_drive TEXT,
-    uploader TEXT DEFAULT 'admin@alhicam.sch.id',
+    uploader TEXT DEFAULT 'superadmin',
     is_trash BOOLEAN DEFAULT FALSE,
     deleted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
@@ -671,10 +723,29 @@ CREATE TABLE IF NOT EXISTS public.master_guru (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 4. ATUR HAK AKSES KEAMANAN (Row Level Security)
+-- 4. TABEL USERS (MANAJEMEN PENGGUNA SISTEM)
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'Administrator Arsip',
+    status TEXT NOT NULL DEFAULT 'Aktif',
+    password TEXT,
+    avatar_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Inisialisasi Akun Super Administrator Utama
+INSERT INTO public.users (id, name, username, role, status, password)
+VALUES ('master-superadmin', 'Solikhin Mbolo', 'superadmin', 'Super Administrator', 'Aktif', 'superadmin123')
+ON CONFLICT (username) DO NOTHING;
+
+-- 5. ATUR HAK AKSES KEAMANAN (Row Level Security)
 ALTER TABLE public.arsip ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.master_siswa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.master_guru ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Izinkan akses baca dan tulis penuh untuk Anon Key (Frontend Web)
 DROP POLICY IF EXISTS "Public Full Access Arsip" ON public.arsip;
@@ -686,12 +757,16 @@ CREATE POLICY "Public Full Access Siswa" ON public.master_siswa FOR ALL USING (t
 DROP POLICY IF EXISTS "Public Full Access Guru" ON public.master_guru;
 CREATE POLICY "Public Full Access Guru" ON public.master_guru FOR ALL USING (true) WITH CHECK (true);
 
--- 5. AKTIFKAN REALTIME REPLICATION SUPABASE
+DROP POLICY IF EXISTS "Public Full Access Users" ON public.users;
+CREATE POLICY "Public Full Access Users" ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. AKTIFKAN REALTIME REPLICATION SUPABASE
 ALTER PUBLICATION supabase_realtime ADD TABLE public.arsip;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.master_siswa;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.master_guru;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
 
--- 6. IZIN AKSES STORAGE BUCKET 'arsip' (Upload & Baca Berkas Fisik)
+-- 7. IZIN AKSES STORAGE BUCKET 'arsip' (Upload & Baca Berkas Fisik)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('arsip', 'arsip', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
