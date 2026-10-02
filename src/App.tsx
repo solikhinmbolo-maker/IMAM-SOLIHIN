@@ -91,7 +91,9 @@ import {
   syncAllMasterSiswaToSupabase,
   syncAllMasterGuruToSupabase,
   fetchMasterSiswaFromSupabase,
-  fetchMasterGuruFromSupabase
+  fetchMasterGuruFromSupabase,
+  subscribeToSupabaseUsers,
+  fetchUsersFromSupabase
 } from './supabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan' | 'sampah';
@@ -205,6 +207,65 @@ export default function App() {
       clearInterval(timerInterval);
     };
   }, [currentUser, lastActiveTime]);
+
+  // Real-time Supabase Users sync & Cross-Tab Profile Sync
+  useEffect(() => {
+    // 1. Initial Cloud Sync
+    fetchUsersFromSupabase().then(cloudUsers => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(cloudUsers));
+        if (currentUser) {
+          const currentUsername = currentUser.email.toLowerCase();
+          const me = cloudUsers.find(u => u.email.toLowerCase() === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
+          if (me) {
+            setCurrentUser({
+              email: me.email,
+              name: me.name,
+              role: me.role,
+              avatarUrl: me.avatarUrl
+            });
+          }
+        }
+      }
+    }).catch(() => {});
+
+    // 2. Realtime Subscription from Supabase Cloud
+    const unsubscribe = subscribeToSupabaseUsers((updatedCloudUsers) => {
+      if (updatedCloudUsers && updatedCloudUsers.length > 0) {
+        localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(updatedCloudUsers));
+        if (currentUser) {
+          const currentUsername = currentUser.email.toLowerCase();
+          const me = updatedCloudUsers.find(u => u.email.toLowerCase() === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
+          if (me) {
+            setCurrentUser({
+              email: me.email,
+              name: me.name,
+              role: me.role,
+              avatarUrl: me.avatarUrl
+            });
+          }
+        }
+      }
+    });
+
+    // 3. Cross-Tab Local Storage Listener
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === DB_KEYS.AUTH_USER || e.key === 'EARSIP_USER_LIST' || e.key === 'EARSIP_ADMIN_ACCOUNT') {
+        const savedAuth = localStorage.getItem(DB_KEYS.AUTH_USER);
+        if (savedAuth) {
+          try {
+            setCurrentUser(JSON.parse(savedAuth));
+          } catch {}
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [currentUser?.email]);
 
   // Navigation State
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');

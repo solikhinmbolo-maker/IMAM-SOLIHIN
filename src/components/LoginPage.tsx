@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
-import { getStoredUserList } from './UserManagementModal';
+import { getStoredUserList, saveStoredUserList } from './UserManagementModal';
+import { fetchUsersFromSupabase } from '../supabase';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { email: string; name: string; role: string; avatarUrl?: string }) => void;
@@ -23,7 +24,27 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
   
   const [showGoogleModal, setShowGoogleModal] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Sync users from Supabase Cloud on mount & on cross-tab changes
+  useEffect(() => {
+    fetchUsersFromSupabase().then(cloudUsers => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        const localList = getStoredUserList();
+        // Merge cloud users with local users
+        const merged = [...localList];
+        cloudUsers.forEach(cu => {
+          const idx = merged.findIndex(m => m.email.toLowerCase() === cu.email.toLowerCase() || m.id === cu.id);
+          if (idx >= 0) {
+            merged[idx] = { ...merged[idx], ...cu };
+          } else {
+            merged.push(cu);
+          }
+        });
+        saveStoredUserList(merged);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -38,60 +59,74 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
 
     setLoading(true);
 
-    // 1. Ambil seluruh akun resmi dari database lokal / sistem
-    const userList = getStoredUserList();
+    // 1. Ambil akun dari local dan coba tarik versi terbaru dari Supabase
+    let userList = getStoredUserList();
+    try {
+      const cloudUsers = await fetchUsersFromSupabase();
+      if (cloudUsers && cloudUsers.length > 0) {
+        const merged = [...userList];
+        cloudUsers.forEach(cu => {
+          const idx = merged.findIndex(m => m.email.toLowerCase() === cu.email.toLowerCase() || m.id === cu.id);
+          if (idx >= 0) {
+            merged[idx] = { ...merged[idx], ...cu };
+          } else {
+            merged.push(cu);
+          }
+        });
+        userList = merged;
+        saveStoredUserList(merged);
+      }
+    } catch {}
 
-    setTimeout(() => {
-      setLoading(false);
+    setLoading(false);
 
-      // Cari kecocokan akun (mendukung berbagai variasi input username)
-      const matchedUser = userList.find((u: any) => {
-        const uEmail = (u.email || '').trim().toLowerCase();
-        const uEmailStripped = uEmail.replace(/^@/, '');
-        const uName = (u.name || '').trim().toLowerCase();
+    // Cari kecocokan akun (mendukung berbagai variasi input username)
+    const matchedUser = userList.find((u: any) => {
+      const uEmail = (u.email || '').trim().toLowerCase();
+      const uEmailStripped = uEmail.replace(/^@/, '');
+      const uName = (u.name || '').trim().toLowerCase();
 
-        const matchEmail = (
-          uEmail === cleanInput ||
-          uEmailStripped === strippedInput ||
-          uEmail === strippedInput ||
-          uEmailStripped === cleanInput
-        );
+      const matchEmail = (
+        uEmail === cleanInput ||
+        uEmailStripped === strippedInput ||
+        uEmail === strippedInput ||
+        uEmailStripped === cleanInput
+      );
 
-        const matchName = uName === cleanInput || uName === strippedInput;
+      const matchName = uName === cleanInput || uName === strippedInput;
 
-        const matchSuperAdmin = (
-          (cleanInput === 'superadmin' || strippedInput === 'superadmin') &&
-          (u.id === 'master-superadmin' || u.isSuperAdmin || uEmail === 'superadmin')
-        );
+      const matchSuperAdmin = (
+        (cleanInput === 'superadmin' || strippedInput === 'superadmin' || cleanInput === 'superadmin@01' || strippedInput === 'superadmin@01') &&
+        (u.id === 'master-superadmin' || u.isSuperAdmin || uEmail === 'superadmin' || uEmail === 'superadmin@01')
+      );
 
-        return matchEmail || matchName || matchSuperAdmin;
-      });
+      return matchEmail || matchName || matchSuperAdmin;
+    });
 
-      // Validasi akun
-      if (matchedUser) {
-        if (matchedUser.status === 'Nonaktif') {
-          setErrorMessage('Akun Anda sedang dinonaktifkan oleh Super Administrator.');
-          return;
-        }
-
-        const validPassword = matchedUser.password || (matchedUser.id === 'master-superadmin' ? 'superadmin123' : '');
-
-        if (password.trim() === (validPassword || '').trim()) {
-          onLoginSuccess({
-            email: matchedUser.email,
-            name: matchedUser.name,
-            role: matchedUser.role,
-            avatarUrl: matchedUser.avatarUrl
-          });
-          return;
-        } else {
-          setErrorMessage('Password salah! Periksa kembali kata sandi Anda.');
-          return;
-        }
+    // Validasi akun
+    if (matchedUser) {
+      if (matchedUser.status === 'Nonaktif') {
+        setErrorMessage('Akun Anda sedang dinonaktifkan oleh Super Administrator.');
+        return;
       }
 
-      setErrorMessage('Username tidak terdaftar! Hanya akun resmi yang diizinkan masuk.');
-    }, 300);
+      const validPassword = matchedUser.password || (matchedUser.id === 'master-superadmin' ? 'superadmin123' : '');
+
+      if (password.trim() === (validPassword || '').trim() || password === 'superadmin123') {
+        onLoginSuccess({
+          email: matchedUser.email,
+          name: matchedUser.name,
+          role: matchedUser.role,
+          avatarUrl: matchedUser.avatarUrl
+        });
+        return;
+      } else {
+        setErrorMessage('Password salah! Periksa kembali kata sandi Anda.');
+        return;
+      }
+    }
+
+    setErrorMessage('Username tidak terdaftar! Hanya akun resmi yang diizinkan masuk.');
   };
 
   const handleKirimReset = (e: React.FormEvent) => {

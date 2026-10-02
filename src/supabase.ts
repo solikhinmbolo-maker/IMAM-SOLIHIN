@@ -266,20 +266,26 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 /**
  * Save user profile data to Supabase 'users' table
  */
-export async function saveUserProfileToSupabase(user: { email: string; name: string; role: string; avatarUrl?: string }): Promise<boolean> {
+export async function saveUserProfileToSupabase(user: { email: string; name: string; role?: string; avatarUrl?: string; password?: string }): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
   try {
+    const cleanUsername = (user.email || '').trim().toLowerCase();
     const row: any = {
-      email: user.email,
+      id: cleanUsername === 'superadmin' ? 'master-superadmin' : `usr-${cleanUsername}`,
+      username: cleanUsername,
       name: user.name,
-      role: user.role,
+      role: user.role || 'Super Administrator',
+      status: 'Aktif',
       updated_at: new Date().toISOString()
     };
     if (user.avatarUrl) {
       row.avatar_url = user.avatarUrl;
     }
-    const { error } = await client.from('users').upsert(row, { onConflict: 'email' });
+    if (user.password) {
+      row.password = user.password;
+    }
+    const { error } = await client.from('users').upsert(row, { onConflict: 'username' });
     if (error) {
       console.warn('Supabase save user profile notice:', error.message);
       return false;
@@ -663,6 +669,35 @@ export async function fetchUsersFromSupabase(): Promise<any[] | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Subscribe to realtime changes on Supabase 'users' table
+ */
+export function subscribeToSupabaseUsers(onUpdate: (users: any[]) => void) {
+  const client = getSupabaseClient();
+  if (!client) return () => {};
+
+  fetchUsersFromSupabase().then(users => {
+    if (users && users.length > 0) onUpdate(users);
+  });
+
+  const channel = client
+    .channel('users_realtime_channel')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'users' },
+      () => {
+        fetchUsersFromSupabase().then(users => {
+          if (users && users.length > 0) onUpdate(users);
+        });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
 }
 
 /**
