@@ -310,7 +310,12 @@ export function getStoredMasterSiswa(): MasterSiswaItem[] {
       safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(INITIAL_MASTER_SISWA));
       return INITIAL_MASTER_SISWA;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(INITIAL_MASTER_SISWA));
+      return INITIAL_MASTER_SISWA;
+    }
+    return parsed;
   } catch {
     return INITIAL_MASTER_SISWA;
   }
@@ -323,7 +328,12 @@ export function getStoredMasterGuru(): MasterGuruItem[] {
       safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(INITIAL_MASTER_GURU));
       return INITIAL_MASTER_GURU;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(INITIAL_MASTER_GURU));
+      return INITIAL_MASTER_GURU;
+    }
+    return parsed;
   } catch {
     return INITIAL_MASTER_GURU;
   }

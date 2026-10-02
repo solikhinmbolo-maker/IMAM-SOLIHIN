@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Chart, registerables } from 'chart.js';
 import { getStoredArsip, getStoredMasterSiswa } from '../data/mockDatabase';
+import { getSupabaseClient } from '../supabase';
 
 Chart.register(...registerables);
 
@@ -78,6 +79,63 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const topKategoriEntry = sortedCategories[0] || ['Belum Ada', 0];
   const topKategoriPct = totalArsip > 0 ? Math.round((topKategoriEntry[1] / totalArsip) * 100) : 0;
   const latestItem = allArsip[0] ? `${allArsip[0].subjek} (${allArsip[0].kategori})` : '-';
+
+  // Real-time Supabase Storage Calculation (1.0 GB Free Tier limit)
+  const TOTAL_STORAGE_MB = 1024; // 1 GB
+  const [remoteStorageMB, setRemoteStorageMB] = useState<number | null>(null);
+
+  // Compute used storage from local archives metadata
+  const localCalculatedMB = useMemo(() => {
+    let sumMB = 0;
+    allArsip.forEach(item => {
+      if (!item.ukuran) return;
+      const str = item.ukuran.toLowerCase();
+      const mbMatch = str.match(/([\d.]+)\s*mb/);
+      if (mbMatch && mbMatch[1]) {
+        sumMB += parseFloat(mbMatch[1]) || 0;
+      } else {
+        const kbMatch = str.match(/([\d.]+)\s*kb/);
+        if (kbMatch && kbMatch[1]) {
+          sumMB += (parseFloat(kbMatch[1]) || 0) / 1024;
+        }
+      }
+    });
+    return sumMB;
+  }, [allArsip]);
+
+  // Query actual files in Supabase Storage bucket 'arsip'
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRemoteSize = async () => {
+      try {
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { data, error } = await client.storage.from('arsip').list('', { limit: 1000 });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          let sumBytes = 0;
+          data.forEach((f: any) => {
+            if (f.metadata?.size) {
+              sumBytes += Number(f.metadata.size);
+            }
+          });
+          if (sumBytes > 0 && isMounted) {
+            setRemoteStorageMB(sumBytes / (1024 * 1024));
+          }
+        }
+      } catch {
+        // Fallback to local metadata calculation
+      }
+    };
+    fetchRemoteSize();
+    return () => { isMounted = false; };
+  }, [allArsip, dataVersion]);
+
+  const activeUsedMB = remoteStorageMB !== null ? remoteStorageMB : localCalculatedMB;
+  const usedStorageDisplay = activeUsedMB >= 1024 
+    ? `${(activeUsedMB / 1024).toFixed(2)} GB`
+    : `${activeUsedMB > 0 ? activeUsedMB.toFixed(1) : '0.0'} MB`;
+  const totalStorageDisplay = '1.0 GB';
+  const storagePercentage = Math.max(0.2, Math.min(100, (activeUsedMB / TOTAL_STORAGE_MB) * 100));
 
   // Siswa per angkatan
   const siswaPerTahun: { [th: string]: number } = {};
@@ -248,7 +306,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               </span>
             </div>
             <span className="text-[10px] font-mono text-cyan-400 font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40">
-              Drive 68.4%
+              Storage {storagePercentage.toFixed(1)}%
             </span>
           </div>
 
@@ -260,16 +318,16 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <span className="text-xs font-semibold text-emerald-400">Berkas Digital</span>
             </div>
 
-            {/* Google Drive Progress Bar */}
+            {/* Storage Progress Bar */}
             <div className="mt-3 space-y-1.5">
               <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                <span>Google Drive Storage</span>
-                <span className="text-slate-300 font-semibold">68.4 GB / 100 GB</span>
+                <span>Storage Penyimpanan</span>
+                <span className="text-slate-300 font-semibold">{usedStorageDisplay} / {totalStorageDisplay}</span>
               </div>
               <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
                 <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full"
-                  style={{ width: '68.4%' }}
+                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
+                  style={{ width: `${storagePercentage}%` }}
                 />
               </div>
             </div>
@@ -350,10 +408,10 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <div className="space-y-1">
                 <span className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
                   <HardDrive className="w-3.5 h-3.5 text-indigo-500" />
-                  Storage Google Drive
+                  Storage Penyimpanan
                 </span>
                 <p className="text-sm font-bold text-slate-900">
-                  68.4 GB <small className="text-xs font-normal text-slate-500">dari 100 GB terpakai</small>
+                  {usedStorageDisplay} <small className="text-xs font-normal text-slate-500">dari {totalStorageDisplay} terpakai</small>
                 </p>
               </div>
 

@@ -264,6 +264,33 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 }
 
 /**
+ * Save user profile data to Supabase 'users' table
+ */
+export async function saveUserProfileToSupabase(user: { email: string; name: string; role: string; avatarUrl?: string }): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const row: any = {
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      updated_at: new Date().toISOString()
+    };
+    if (user.avatarUrl) {
+      row.avatar_url = user.avatarUrl;
+    }
+    const { error } = await client.from('users').upsert(row, { onConflict: 'email' });
+    if (error) {
+      console.warn('Supabase save user profile notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Save / Upsert single Siswa to Supabase
  */
 export async function saveSiswaToSupabase(item: MasterSiswaItem): Promise<boolean> {
@@ -275,9 +302,7 @@ export async function saveSiswaToSupabase(item: MasterSiswaItem): Promise<boolea
       nisn: item.nisn || '',
       nama: item.nama || '',
       kelas: item.kelas || '',
-      angkatan: item.tahun || '',
-      jk: (item as any).jk || 'L',
-      status: (item as any).status || 'Aktif'
+      angkatan: item.tahun || ''
     };
     const { error } = await client
       .from('master_siswa')
@@ -303,12 +328,8 @@ export async function saveGuruToSupabase(item: MasterGuruItem): Promise<boolean>
     const row = {
       id: item.id,
       nuptk: item.nuptk || '',
-      nip: (item as any).nip || '-',
       nama: item.nama || '',
-      jabatan: item.jabatan || '',
-      tugas: (item as any).tugas || item.jabatan || '',
-      jk: (item as any).jk || 'L',
-      status: (item as any).status || 'Aktif'
+      jabatan: item.jabatan || ''
     };
     const { error } = await client
       .from('master_guru')
@@ -327,7 +348,7 @@ export async function saveGuruToSupabase(item: MasterGuruItem): Promise<boolean>
 /**
  * Bulk sync all Siswa to Supabase
  */
-export async function syncAllMasterSiswaToSupabase(items: MasterSiswaItem[]): Promise<{ success: boolean; count: number }> {
+export async function syncAllMasterSiswaToSupabase(items: MasterSiswaItem[]): Promise<{ success: boolean; count: number; error?: string }> {
   const client = getSupabaseClient();
   if (!client || !Array.isArray(items) || items.length === 0) {
     return { success: false, count: 0 };
@@ -338,28 +359,28 @@ export async function syncAllMasterSiswaToSupabase(items: MasterSiswaItem[]): Pr
       nisn: s.nisn || '',
       nama: s.nama || '',
       kelas: s.kelas || '',
-      angkatan: s.tahun || '',
-      jk: (s as any).jk || 'L',
-      status: (s as any).status || 'Aktif'
+      angkatan: s.tahun || ''
     }));
+
     const { error } = await client
       .from('master_siswa')
       .upsert(rows, { onConflict: 'id' });
+
     if (error) {
       console.error('Supabase bulk sync siswa error:', error);
-      return { success: false, count: 0 };
+      return { success: false, count: 0, error: error.message };
     }
     return { success: true, count: rows.length };
-  } catch (err) {
+  } catch (err: any) {
     console.error('Supabase bulk sync siswa exception:', err);
-    return { success: false, count: 0 };
+    return { success: false, count: 0, error: err?.message };
   }
 }
 
 /**
  * Bulk sync all Guru to Supabase
  */
-export async function syncAllMasterGuruToSupabase(items: MasterGuruItem[]): Promise<{ success: boolean; count: number }> {
+export async function syncAllMasterGuruToSupabase(items: MasterGuruItem[]): Promise<{ success: boolean; count: number; error?: string }> {
   const client = getSupabaseClient();
   if (!client || !Array.isArray(items) || items.length === 0) {
     return { success: false, count: 0 };
@@ -368,24 +389,22 @@ export async function syncAllMasterGuruToSupabase(items: MasterGuruItem[]): Prom
     const rows = items.map(g => ({
       id: g.id,
       nuptk: g.nuptk || '',
-      nip: (g as any).nip || '-',
       nama: g.nama || '',
-      jabatan: g.jabatan || '',
-      tugas: (g as any).tugas || g.jabatan || '',
-      jk: (g as any).jk || 'L',
-      status: (g as any).status || 'Aktif'
+      jabatan: g.jabatan || ''
     }));
+
     const { error } = await client
       .from('master_guru')
       .upsert(rows, { onConflict: 'id' });
+
     if (error) {
       console.error('Supabase bulk sync guru error:', error);
-      return { success: false, count: 0 };
+      return { success: false, count: 0, error: error.message };
     }
     return { success: true, count: rows.length };
-  } catch (err) {
+  } catch (err: any) {
     console.error('Supabase bulk sync guru exception:', err);
-    return { success: false, count: 0 };
+    return { success: false, count: 0, error: err?.message };
   }
 }
 

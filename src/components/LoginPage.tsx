@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
 
 interface LoginPageProps {
-  onLoginSuccess: (user: { email: string; name: string; role: string }) => void;
+  onLoginSuccess: (user: { email: string; name: string; role: string; avatarUrl?: string }) => void;
   sessionNotice?: string;
 }
 
@@ -27,8 +27,6 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
     setErrorMessage('');
 
     const cleanEmail = email.trim().toLowerCase();
-    const validEmails = ['admin@alhicam.sch.id', 'solikhin@alhicam.sch.id', 'admin'];
-    const validPass = 'alhicam2026';
 
     if (!cleanEmail || !password) {
       setErrorMessage('Silakan isi Email dan Password terlebih dahulu.');
@@ -37,13 +35,26 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
 
     setLoading(true);
 
+    const customAccountRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
+    let customAccount: any = null;
+    if (customAccountRaw) {
+      try { customAccount = JSON.parse(customAccountRaw); } catch {}
+    }
+
+    const allowedEmails = ['admin@alhicam.sch.id', 'solikhin@alhicam.sch.id', 'admin'];
+    if (customAccount?.email) {
+      allowedEmails.push(customAccount.email.toLowerCase());
+    }
+    const targetPassword = customAccount?.password || 'alhicam2026';
+
     setTimeout(() => {
       setLoading(false);
-      if (validEmails.includes(cleanEmail) && password === validPass) {
+      if (allowedEmails.includes(cleanEmail) && password === targetPassword) {
         onLoginSuccess({
           email: cleanEmail,
-          name: 'Solikhin Mbolo',
-          role: 'Super Administrator'
+          name: customAccount?.name || 'Solikhin Mbolo',
+          role: customAccount?.role || 'Super Administrator',
+          avatarUrl: customAccount?.avatarUrl
         });
       } else {
         setErrorMessage('Email atau Password salah! (Default: admin@alhicam.sch.id / alhicam2026)');

@@ -6,6 +6,7 @@ import {
   CheckSquare, 
   BarChart3, 
   Users, 
+  User,
   Settings, 
   Power, 
   Menu, 
@@ -48,6 +49,8 @@ import AuditLogView from './components/AuditLogView';
 import LaporanView from './components/LaporanView';
 import TongSampahView from './components/TongSampahView';
 import PreviewModal from './components/PreviewModal';
+import EditProfileModal from './components/EditProfileModal';
+import UserManagementModal from './components/UserManagementModal';
 import { 
   ArsipItem, 
   DB_KEYS, 
@@ -132,14 +135,22 @@ export default function App() {
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string>('');
 
   // Auth state: Default MUST LOGIN FIRST (null) unless there is a fresh session verified within 30 min
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; role: string } | null>(() => {
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; role: string; avatarUrl?: string } | null>(() => {
     try {
       const saved = localStorage.getItem(DB_KEYS.AUTH_USER);
       const lastActive = localStorage.getItem('EARSIP_LAST_ACTIVE_TIME');
       if (saved && lastActive) {
         const timeDiff = Date.now() - parseInt(lastActive, 10);
         if (timeDiff < INACTIVITY_TIMEOUT_MS) {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          const adminAccRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
+          if (adminAccRaw) {
+            try {
+              const acc = JSON.parse(adminAccRaw);
+              if (acc.avatarUrl) parsed.avatarUrl = acc.avatarUrl;
+            } catch {}
+          }
+          return parsed;
         }
       }
     } catch {}
@@ -211,6 +222,7 @@ export default function App() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showSettingModal, setShowSettingModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [settingTab, setSettingTab] = useState<'tampilan' | 'bahasa' | 'akun' | 'cloud' | 'tentang'>('tampilan');
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
 
@@ -290,10 +302,26 @@ export default function App() {
       syncAllMasterGuruToSupabase(localGuru)
     ]);
 
+    const statusMsgs: string[] = [];
+    statusMsgs.push(`${resArsip.count} arsip`);
+    if (resSiswa.success) {
+      statusMsgs.push(`${resSiswa.count} data siswa`);
+    } else if (resSiswa.error) {
+      statusMsgs.push(`siswa (${resSiswa.error})`);
+    } else {
+      statusMsgs.push('0 siswa');
+    }
+
+    if (resGuru.success) {
+      statusMsgs.push(`${resGuru.count} data guru`);
+    } else if (resGuru.error) {
+      statusMsgs.push(`guru (${resGuru.error})`);
+    } else {
+      statusMsgs.push('0 guru');
+    }
+
     if (resArsip.success || resSiswa.success || resGuru.success) {
-      setSupabaseTestStatus(
-        `✓ Berhasil sinkronisasi ke Supabase: ${resArsip.count} arsip, ${resSiswa.count} data siswa, dan ${resGuru.count} data guru!`
-      );
+      setSupabaseTestStatus(`✓ Berhasil sinkronisasi ke Supabase: ${statusMsgs.join(', ')}!`);
     } else {
       setSupabaseTestStatus('Gagal menyinkronkan ke Supabase. Pastikan tabel "arsip", "master_siswa", dan "master_guru" sudah dibuat.');
     }
@@ -1227,13 +1255,12 @@ function doGet(e) {
         {/* Sidebar Footer System Info */}
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/70">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm flex-shrink-0">
               <Shield className="w-4 h-4" />
             </div>
-            <div>
-              <p className="text-xs font-semibold text-white">E-Arsip V1.0</p>
-              <p className="text-[10px] text-slate-400">SMP Al-Hikam Jombang</p>
-            </div>
+            <p className="text-xs font-semibold text-white tracking-wide truncate">
+              E-Arsip Al-hicamV1.0
+            </p>
           </div>
         </div>
       </aside>
@@ -1258,12 +1285,6 @@ function doGet(e) {
           </div>
 
           <div className="flex items-center gap-4 sm:gap-5">
-            {/* 30-Min Idle Protection Indicator */}
-            <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Proteksi Sesi 30 Menit Aktif</span>
-            </div>
-
             <button
               onClick={() => setShowLogoutModal(true)}
               className="flex flex-col items-center justify-center text-red-400 hover:text-red-300 transition-transform active:scale-95 cursor-pointer group"
@@ -1275,20 +1296,27 @@ function doGet(e) {
               <span className="text-[10px] font-bold text-red-400 mt-1 uppercase tracking-wider">Logout</span>
             </button>
 
-            <div className="flex items-center gap-3 pl-3 border-l border-slate-700/80">
+            <button
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="flex items-center gap-3 pl-3 border-l border-slate-700/80 hover:bg-slate-800/80 py-1 px-2 rounded-2xl transition-all cursor-pointer group text-left"
+              title="Klik untuk Edit Nama, Password & Foto Profil"
+            >
               <div className="text-right">
-                <span className="text-xs font-bold text-white block leading-tight">{currentUser.name}</span>
+                <span className="text-xs font-bold text-white block leading-tight group-hover:text-cyan-300 transition-colors">
+                  {currentUser.name}
+                </span>
                 <span className="text-[10px] text-cyan-400 font-semibold block">{currentUser.role}</span>
               </div>
               <div className="relative">
                 <img
-                  src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=100"
+                  src={currentUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=100`}
                   alt="Avatar"
-                  className="w-10 h-10 rounded-full border-2 border-white/80 object-cover shadow"
+                  className="w-10 h-10 rounded-full border-2 border-white/80 group-hover:border-cyan-400 object-cover shadow transition-colors"
                 />
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900" title="Online" />
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -1342,23 +1370,26 @@ function doGet(e) {
               </button>
             )}
 
-            {/* Right: Single Refined Profile Pill Trigger */}
+            {/* Right: Perfectly Centered & Balanced Profile Trigger */}
             <button
-              onClick={() => setMobileProfileSheetOpen(true)}
-              className="flex items-center gap-2.5 p-1 pl-3 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-white active:scale-95 transition-all cursor-pointer shadow-md"
-              title="Profil & Opsi Cepat"
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="flex items-center gap-2.5 p-1 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 text-white active:scale-95 transition-all cursor-pointer shadow-md group"
+              title="Klik untuk Edit Profil Pengguna"
             >
-              <div className="text-right hidden xs:block">
-                <span className="text-[11px] font-bold text-white block leading-none truncate max-w-[90px]">Pak Solikhin</span>
-                <span className="text-[9px] text-cyan-400 font-medium leading-none block mt-0.5">Admin</span>
+              <div className="text-right pl-2 hidden sm:block">
+                <span className="text-[11px] font-bold text-white block leading-none truncate max-w-[95px] group-hover:text-cyan-300 transition-colors">
+                  {currentUser.name}
+                </span>
+                <span className="text-[9px] text-cyan-400 font-medium leading-none block mt-0.5">{currentUser.role}</span>
               </div>
-              <div className="relative">
+              <div className="relative w-9 h-9 flex-shrink-0 flex items-center justify-center">
                 <img
-                  src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=100"
-                  alt="Avatar"
-                  className="w-7 h-7 rounded-full border border-blue-400 object-cover"
+                  src={currentUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=100`}
+                  alt={currentUser.name}
+                  className="w-9 h-9 rounded-full border-2 border-cyan-400/80 group-hover:border-cyan-300 object-cover shadow-sm transition-colors"
                 />
-                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border border-slate-900" />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0F172A]" title="Online" />
               </div>
             </button>
           </div>
@@ -1434,21 +1465,34 @@ function doGet(e) {
           <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-4" />
 
           {/* User info card */}
-          <div className="flex items-center gap-3.5 pb-4 mb-4 border-b border-slate-800">
+          <div 
+            onClick={() => {
+              setMobileProfileSheetOpen(false);
+              setShowEditProfileModal(true);
+            }}
+            className="flex items-center gap-3.5 pb-4 mb-4 border-b border-slate-800 cursor-pointer hover:bg-slate-800/40 p-2 rounded-2xl transition-colors group"
+          >
             <img
-              src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=100"
+              src={currentUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=100`}
               alt="Avatar"
-              className="w-12 h-12 rounded-2xl border-2 border-blue-500 object-cover shadow-md"
+              className="w-12 h-12 rounded-2xl border-2 border-blue-500 object-cover shadow-md group-hover:border-cyan-400 transition-colors"
             />
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold text-white truncate">{currentUser.name}</h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-white truncate group-hover:text-cyan-300 transition-colors">{currentUser.name}</h3>
+                <span className="text-[10px] text-cyan-400 bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-800/40">Edit</span>
+              </div>
               <p className="text-xs text-slate-400 font-mono truncate">{currentUser.email}</p>
               <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                 {currentUser.role}
               </span>
             </div>
             <button
-              onClick={() => setMobileProfileSheetOpen(false)}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileProfileSheetOpen(false);
+              }}
               className="p-1 text-slate-400 hover:text-white"
             >
               <X className="w-5 h-5" />
@@ -1457,6 +1501,21 @@ function doGet(e) {
 
           {/* Action options list */}
           <div className="space-y-1 mb-4">
+            <button
+              onClick={() => {
+                setMobileProfileSheetOpen(false);
+                setShowEditProfileModal(true);
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/30 text-blue-300 flex items-center justify-center">
+                  <User className="w-4 h-4" />
+                </div>
+                <span>Edit Profil, Nama & Password</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-blue-400" />
+            </button>
             <button
               onClick={() => {
                 setMobileProfileSheetOpen(false);
@@ -1647,58 +1706,16 @@ function doGet(e) {
         </div>
       )}
 
-      {/* 7. MODAL MANAJEMEN USER */}
-      {showUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100 animate-scaleUp">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Manajemen Pengguna</h3>
-                  <p className="text-xs text-slate-500">Daftar akun berwenang sistem E-Arsip</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowUserModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              {[
-                { name: 'Solikhin Mbolo', email: 'admin@alhicam.sch.id', role: 'Super Administrator', status: 'Aktif' },
-                { name: 'Operator Tata Usaha', email: 'solikhin@alhicam.sch.id', role: 'Administrator Arsip', status: 'Aktif' },
-                { name: 'Nurul Hidayah, S.Kom', email: 'nurul@alhicam.sch.id', role: 'Admin Guru & TIK', status: 'Aktif' }
-              ].map((u, i) => (
-                <div key={i} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div>
-                    <strong className="text-xs sm:text-sm font-semibold text-slate-900 block">{u.name}</strong>
-                    <span className="text-[11px] text-slate-500 font-mono">{u.email}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 block">
-                      {u.role}
-                    </span>
-                    <span className="text-[10px] text-emerald-600 font-semibold block mt-1">● {u.status}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowUserModal(false)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer"
-            >
-              Tutup Panel
-            </button>
-          </div>
-        </div>
+      {/* 7. MODAL MANAJEMEN USER (DYNAMIC, EDITABLE & REAL-TIME SYNC) */}
+      {showUserModal && currentUser && (
+        <UserManagementModal
+          isOpen={showUserModal}
+          onClose={() => setShowUserModal(false)}
+          currentUser={currentUser}
+          onUpdateCurrentUser={(updated) => {
+            setCurrentUser(updated);
+          }}
+        />
       )}
 
       {/* 8. MODAL PENGATURAN SISTEM & PREFERENSI APLIKASI */}
@@ -1876,25 +1893,39 @@ function doGet(e) {
               {/* TAB 3: KETERANGAN AKUN & KEAMANAN */}
               {settingTab === 'akun' && (
                 <div className="space-y-4 animate-fadeIn">
-                  <div className="p-4 bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-2xl text-white flex items-center gap-4 shadow-md">
-                    <img
-                      src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=120"
-                      alt="Avatar"
-                      className="w-14 h-14 rounded-2xl border-2 border-cyan-400 object-cover shadow"
-                    />
-                    <div>
-                      <h4 className="text-sm font-bold text-white">{currentUser.name}</h4>
-                      <p className="text-xs text-cyan-300 font-mono mt-0.5">{currentUser.email}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">
-                          {currentUser.role}
-                        </span>
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          Status: Aktif & Terverifikasi
-                        </span>
+                  <div className="p-4 bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-2xl text-white flex items-center justify-between gap-4 shadow-md">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={currentUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=120`}
+                        alt="Avatar"
+                        className="w-14 h-14 rounded-2xl border-2 border-cyan-400 object-cover shadow"
+                      />
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{currentUser.name}</h4>
+                        <p className="text-xs text-cyan-300 font-mono mt-0.5">{currentUser.email}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">
+                            {currentUser.role}
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Status: Aktif & Terverifikasi
+                          </span>
+                        </div>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingModal(false);
+                        setShowEditProfileModal(true);
+                      }}
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md flex-shrink-0"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Edit Profil</span>
+                    </button>
                   </div>
 
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
@@ -2233,6 +2264,18 @@ function doGet(e) {
           }
         }}
       />
+
+      {/* 10. EDIT PROFIL & KREDENSIAL MODAL */}
+      {currentUser && (
+        <EditProfileModal
+          isOpen={showEditProfileModal}
+          onClose={() => setShowEditProfileModal(false)}
+          currentUser={currentUser}
+          onSaveSuccess={(updatedUser) => {
+            setCurrentUser(updatedUser);
+          }}
+        />
+      )}
 
     </div>
   );
