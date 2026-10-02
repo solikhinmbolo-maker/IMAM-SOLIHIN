@@ -49,18 +49,8 @@ export default function FormUnduhView({
     return () => window.removeEventListener('earsip:cloud-synced', handleCloudUpdate);
   }, []);
 
-  // Get data with strict deduplication
-  const rawArsip = useMemo(() => getStoredArsip(), [dataVersion]);
-  const allArsip = useMemo(() => {
-    const map = new Map<string, ArsipItem>();
-    rawArsip.forEach(item => {
-      const key = `${(item.subjek || '').trim().toLowerCase()}___${(item.kategori || '').trim().toLowerCase()}`;
-      if (!map.has(key)) {
-        map.set(key, item);
-      }
-    });
-    return Array.from(map.values());
-  }, [rawArsip]);
+  // Get data directly from stored active archives
+  const allArsip = useMemo(() => getStoredArsip(), [dataVersion]);
 
   // Filter based on active category
   const scopedData = useMemo(() => {

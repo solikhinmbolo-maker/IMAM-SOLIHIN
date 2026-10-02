@@ -242,32 +242,6 @@ export async function getFileAttachment(id: string): Promise<string | null> {
   }
 }
 
-// Self-Healing Routine: Purge legacy demo dummy items while preserving fileDataUrl for instant local preview
-function sanitizeLocalStorage() {
-  if (typeof window === 'undefined') return;
-  try {
-    const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
-    if (!raw) return;
-
-    const parsed: ArsipItem[] = JSON.parse(raw);
-    
-    // Purge legacy demo items from older versions
-    const realItemsOnly = parsed.filter(item => {
-      const isDemoId = item.id.startsWith('SSW-') || item.id.startsWith('GRU-') || item.id.startsWith('LYN-');
-      const isDemoLink = item.linkDrive && item.linkDrive.includes('demo-');
-      return !isDemoId && !isDemoLink;
-    });
-
-    // Keep fileDataUrl intact in localStorage so files open instantly right in the modal after refresh
-    localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(realItemsOnly));
-  } catch (err) {
-    console.warn('Sanitizing localStorage:', err);
-  }
-}
-
-// Run immediately
-sanitizeLocalStorage();
-
 export function getStoredMasterSiswa(): MasterSiswaItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.MASTER_SISWA);

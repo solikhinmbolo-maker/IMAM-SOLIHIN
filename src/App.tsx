@@ -57,6 +57,7 @@ import {
   clearAllArsipData,
   restoreSampleArsipData,
   getStoredArsip,
+  getAllRawArsip,
   getTrashArsip,
   syncItemToGoogleCloud,
   fetchLiveFullDataFromGoogle,
@@ -230,42 +231,49 @@ export default function App() {
 
     const unsubArsip = subscribeToArsip((remoteItems) => {
       try {
-        const currentLocal = getStoredArsip();
-        // Bidirectional merge (Union of local and remote items by ID) so no document ever disappears
-        const mergedMap = new Map<string, ArsipItem>();
-        currentLocal.forEach(it => mergedMap.set(it.id, it));
-        if (Array.isArray(remoteItems)) {
-          remoteItems.forEach(it => {
-            const existing = mergedMap.get(it.id);
-            const activeBlob = it.fileDataUrl || existing?.fileDataUrl;
-            
-            // Cache locally on this device if present
-            if (activeBlob) {
-              saveFileAttachment(it.id, activeBlob);
-            }
+        if (!Array.isArray(remoteItems)) return;
 
-            // Auto-heal: If local device HAS a file attachment, but cloud Firestore lacks it, push to Firestore
-            if (!it.fileDataUrl && existing?.fileDataUrl) {
-              saveArsipToFirestore({ ...it, fileDataUrl: existing.fileDataUrl }).catch(() => {});
-            }
+        // Preserve local file attachment blobs if available
+        const localRaw = getAllRawArsip();
+        const localMap = new Map<string, ArsipItem>();
+        localRaw.forEach(it => localMap.set(it.id, it));
 
-            mergedMap.set(it.id, {
-              ...it,
-              fileDataUrl: activeBlob
-            });
+        const updatedList: ArsipItem[] = [];
+
+        remoteItems.forEach(it => {
+          const existingLocal = localMap.get(it.id);
+          const activeBlob = it.fileDataUrl || existingLocal?.fileDataUrl;
+
+          if (activeBlob) {
+            saveFileAttachment(it.id, activeBlob);
+          }
+
+          // Auto-heal file attachment base64 to Cloud Firestore if local has it but remote lacks it
+          if (!it.fileDataUrl && existingLocal?.fileDataUrl) {
+            saveArsipToFirestore({ ...it, fileDataUrl: existingLocal.fileDataUrl }).catch(() => {});
+          }
+
+          updatedList.push({
+            ...it,
+            fileDataUrl: activeBlob
           });
-        }
-        const finalMerged = Array.from(mergedMap.values()).sort((a, b) => {
-          return new Date(b.tanggal || 0).getTime() - new Date(a.tanggal || 0).getTime();
         });
-        const clean = finalMerged.map(it => {
+
+        // Save authoritative list from Firestore to LocalStorage (without fileDataUrl to save quota)
+        const clean = updatedList.map(it => {
           const copy = { ...it };
           delete copy.fileDataUrl;
           return copy;
         });
+
         localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(clean));
         setDbVersion(v => v + 1);
-      } catch {}
+
+        // Notify all views to re-render in unison
+        window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+      } catch (err) {
+        console.error('Error syncing remote items:', err);
+      }
     });
 
     const unsubSiswa = subscribeToMasterSiswa((siswaList) => {
