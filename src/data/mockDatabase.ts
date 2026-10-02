@@ -6,7 +6,9 @@ import {
 } from '../firebase';
 import {
   saveArsipToSupabase,
-  deleteArsipFromSupabase
+  deleteArsipFromSupabase,
+  saveSiswaToSupabase,
+  saveGuruToSupabase
 } from '../supabase';
 
 export interface MasterSiswaItem {
@@ -635,6 +637,7 @@ export function saveMasterSiswa(item: MasterSiswaItem): MasterSiswaItem[] {
     kelas: item.kelas,
     tanggalTerdaftar: new Date().toLocaleDateString('id-ID')
   }).catch(() => {});
+  saveSiswaToSupabase(item).catch(() => {});
 
   addAuditLog({
     aksi: 'UPDATE',
@@ -683,6 +686,7 @@ export function saveMasterGuru(item: MasterGuruItem): MasterGuruItem[] {
     jabatan: item.jabatan,
     tanggalTerdaftar: new Date().toLocaleDateString('id-ID')
   }).catch(() => {});
+  saveGuruToSupabase(item).catch(() => {});
 
   addAuditLog({
     aksi: 'UPDATE',

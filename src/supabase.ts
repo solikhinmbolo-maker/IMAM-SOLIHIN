@@ -264,6 +264,189 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 }
 
 /**
+ * Save / Upsert single Siswa to Supabase
+ */
+export async function saveSiswaToSupabase(item: MasterSiswaItem): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const row = {
+      id: item.id,
+      nisn: item.nisn || '',
+      nama: item.nama || '',
+      kelas: item.kelas || '',
+      angkatan: item.tahun || '',
+      jk: (item as any).jk || 'L',
+      status: (item as any).status || 'Aktif'
+    };
+    const { error } = await client
+      .from('master_siswa')
+      .upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase save siswa error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase save siswa exception:', err);
+    return false;
+  }
+}
+
+/**
+ * Save / Upsert single Guru to Supabase
+ */
+export async function saveGuruToSupabase(item: MasterGuruItem): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const row = {
+      id: item.id,
+      nuptk: item.nuptk || '',
+      nip: (item as any).nip || '-',
+      nama: item.nama || '',
+      jabatan: item.jabatan || '',
+      tugas: (item as any).tugas || item.jabatan || '',
+      jk: (item as any).jk || 'L',
+      status: (item as any).status || 'Aktif'
+    };
+    const { error } = await client
+      .from('master_guru')
+      .upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase save guru error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase save guru exception:', err);
+    return false;
+  }
+}
+
+/**
+ * Bulk sync all Siswa to Supabase
+ */
+export async function syncAllMasterSiswaToSupabase(items: MasterSiswaItem[]): Promise<{ success: boolean; count: number }> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(items) || items.length === 0) {
+    return { success: false, count: 0 };
+  }
+  try {
+    const rows = items.map(s => ({
+      id: s.id,
+      nisn: s.nisn || '',
+      nama: s.nama || '',
+      kelas: s.kelas || '',
+      angkatan: s.tahun || '',
+      jk: (s as any).jk || 'L',
+      status: (s as any).status || 'Aktif'
+    }));
+    const { error } = await client
+      .from('master_siswa')
+      .upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.error('Supabase bulk sync siswa error:', error);
+      return { success: false, count: 0 };
+    }
+    return { success: true, count: rows.length };
+  } catch (err) {
+    console.error('Supabase bulk sync siswa exception:', err);
+    return { success: false, count: 0 };
+  }
+}
+
+/**
+ * Bulk sync all Guru to Supabase
+ */
+export async function syncAllMasterGuruToSupabase(items: MasterGuruItem[]): Promise<{ success: boolean; count: number }> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(items) || items.length === 0) {
+    return { success: false, count: 0 };
+  }
+  try {
+    const rows = items.map(g => ({
+      id: g.id,
+      nuptk: g.nuptk || '',
+      nip: (g as any).nip || '-',
+      nama: g.nama || '',
+      jabatan: g.jabatan || '',
+      tugas: (g as any).tugas || g.jabatan || '',
+      jk: (g as any).jk || 'L',
+      status: (g as any).status || 'Aktif'
+    }));
+    const { error } = await client
+      .from('master_guru')
+      .upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.error('Supabase bulk sync guru error:', error);
+      return { success: false, count: 0 };
+    }
+    return { success: true, count: rows.length };
+  } catch (err) {
+    console.error('Supabase bulk sync guru exception:', err);
+    return { success: false, count: 0 };
+  }
+}
+
+/**
+ * Fetch all Siswa from Supabase
+ */
+export async function fetchMasterSiswaFromSupabase(): Promise<MasterSiswaItem[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client
+      .from('master_siswa')
+      .select('*')
+      .order('nama', { ascending: true });
+    if (error) {
+      console.warn('Supabase fetch master_siswa error:', error);
+      return null;
+    }
+    if (!Array.isArray(data)) return [];
+    return data.map((row: any) => ({
+      id: row.id,
+      nisn: row.nisn || '',
+      nama: row.nama || '',
+      kelas: row.kelas || '',
+      tahun: row.angkatan || ''
+    }));
+  } catch (err) {
+    console.warn('Supabase fetch master_siswa exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch all Guru from Supabase
+ */
+export async function fetchMasterGuruFromSupabase(): Promise<MasterGuruItem[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client
+      .from('master_guru')
+      .select('*')
+      .order('nama', { ascending: true });
+    if (error) {
+      console.warn('Supabase fetch master_guru error:', error);
+      return null;
+    }
+    if (!Array.isArray(data)) return [];
+    return data.map((row: any) => ({
+      id: row.id,
+      nuptk: row.nuptk || '',
+      nama: row.nama || '',
+      jabatan: row.jabatan || ''
+    }));
+  } catch (err) {
+    console.warn('Supabase fetch master_guru exception:', err);
+    return null;
+  }
+}
+
+/**
  * Upload file base64 directly to Supabase Storage bucket 'arsip'
  */
 export async function uploadFileToSupabaseStorage(

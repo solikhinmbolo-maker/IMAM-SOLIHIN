@@ -64,7 +64,9 @@ import {
   saveFileAttachment,
   getFileAttachment,
   GOOGLE_APPS_SCRIPT_ROBUST_CODE,
-  testGoogleWebhook
+  testGoogleWebhook,
+  getStoredMasterSiswa,
+  getStoredMasterGuru
 } from './data/mockDatabase';
 import { 
   subscribeToArsip, 
@@ -82,7 +84,11 @@ import {
   SUPABASE_SQL_SCHEMA,
   sanitizeSupabaseUrl,
   getSupabaseClient,
-  syncAllArsipToSupabase
+  syncAllArsipToSupabase,
+  syncAllMasterSiswaToSupabase,
+  syncAllMasterGuruToSupabase,
+  fetchMasterSiswaFromSupabase,
+  fetchMasterGuruFromSupabase
 } from './supabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan' | 'sampah';
@@ -272,14 +278,24 @@ export default function App() {
 
   const handleSyncLocalToSupabase = async () => {
     setIsSyncingToSupabase(true);
-    setSupabaseTestStatus('Mengunggah seluruh data arsip lokal ke Supabase PostgreSQL...');
+    setSupabaseTestStatus('Mengunggah data Arsip, Siswa, dan Guru ke Supabase Cloud...');
     
     const localItems = getAllRawArsip();
-    const result = await syncAllArsipToSupabase(localItems);
-    if (result.success) {
-      setSupabaseTestStatus(`✓ Berhasil menyinkronkan ${result.count} data arsip ke Supabase Cloud!`);
+    const localSiswa = getStoredMasterSiswa();
+    const localGuru = getStoredMasterGuru();
+
+    const [resArsip, resSiswa, resGuru] = await Promise.all([
+      syncAllArsipToSupabase(localItems),
+      syncAllMasterSiswaToSupabase(localSiswa),
+      syncAllMasterGuruToSupabase(localGuru)
+    ]);
+
+    if (resArsip.success || resSiswa.success || resGuru.success) {
+      setSupabaseTestStatus(
+        `✓ Berhasil sinkronisasi ke Supabase: ${resArsip.count} arsip, ${resSiswa.count} data siswa, dan ${resGuru.count} data guru!`
+      );
     } else {
-      setSupabaseTestStatus('Gagal menyinkronkan ke Supabase. Pastikan tabel "arsip" sudah dibuat melalui SQL Editor.');
+      setSupabaseTestStatus('Gagal menyinkronkan ke Supabase. Pastikan tabel "arsip", "master_siswa", dan "master_guru" sudah dibuat.');
     }
     setIsSyncingToSupabase(false);
   };
@@ -401,6 +417,31 @@ export default function App() {
         console.error('Error syncing Supabase items:', err);
       }
     });
+
+    // Auto sync/seed master siswa and master guru from/to Supabase
+    fetchMasterSiswaFromSupabase().then(supaSiswa => {
+      if (supaSiswa && supaSiswa.length > 0) {
+        localStorage.setItem(DB_KEYS.MASTER_SISWA, JSON.stringify(supaSiswa));
+        setDbVersion(v => v + 1);
+      } else {
+        const localSiswa = getStoredMasterSiswa();
+        if (localSiswa && localSiswa.length > 0) {
+          syncAllMasterSiswaToSupabase(localSiswa);
+        }
+      }
+    }).catch(() => {});
+
+    fetchMasterGuruFromSupabase().then(supaGuru => {
+      if (supaGuru && supaGuru.length > 0) {
+        localStorage.setItem(DB_KEYS.MASTER_GURU, JSON.stringify(supaGuru));
+        setDbVersion(v => v + 1);
+      } else {
+        const localGuru = getStoredMasterGuru();
+        if (localGuru && localGuru.length > 0) {
+          syncAllMasterGuruToSupabase(localGuru);
+        }
+      }
+    }).catch(() => {});
 
     return () => {
       unsubArsip();
