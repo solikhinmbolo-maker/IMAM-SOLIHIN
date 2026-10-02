@@ -4,6 +4,10 @@ import {
   saveSiswaToFirestore, 
   saveGuruToFirestore 
 } from '../firebase';
+import {
+  saveArsipToSupabase,
+  deleteArsipFromSupabase
+} from '../supabase';
 
 export interface MasterSiswaItem {
   id: string;
@@ -337,8 +341,9 @@ export function saveArsipItem(item: ArsipItem): ArsipItem[] {
   const updatedClean = [cleanItemForStorage, ...currentClean];
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
 
-  // Sync to Firebase Cloud Firestore (including fileDataUrl so all devices see the real uploaded file!)
+  // Sync to Firebase Cloud Firestore and Supabase PostgreSQL
   saveArsipToFirestore(item).catch(() => {});
+  saveArsipToSupabase(item).catch(() => {});
 
   // Return list with enriched item for immediate UI update
   return [item, ...current];
@@ -440,22 +445,29 @@ export function replaceArsipItem(existingId: string, newItem: ArsipItem): ArsipI
 /**
  * Move document to Trash (Soft Delete)
  */
-export function moveToTrashArsipItem(id: string): ArsipItem[] {
+export async function moveToTrashArsipItem(id: string): Promise<ArsipItem[]> {
   const all = getAllRawArsip();
+  let trashedTarget: ArsipItem | null = null;
+
   const updated = all.map(item => {
     if (item.id === id) {
-      const trashedItem: ArsipItem = {
+      trashedTarget = {
         ...item,
         isTrash: true,
         deletedAt: new Date().toISOString()
       };
-      saveArsipToFirestore(trashedItem).catch(() => {});
-      return trashedItem;
+      return trashedTarget;
     }
     return item;
   });
 
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updated));
+
+  if (trashedTarget) {
+    await saveArsipToFirestore(trashedTarget);
+    await saveArsipToSupabase(trashedTarget).catch(() => {});
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
   }
@@ -465,22 +477,29 @@ export function moveToTrashArsipItem(id: string): ArsipItem[] {
 /**
  * Restore document from Trash back to active archives
  */
-export function restoreFromTrashArsipItem(id: string): ArsipItem[] {
+export async function restoreFromTrashArsipItem(id: string): Promise<ArsipItem[]> {
   const all = getAllRawArsip();
+  let restoredTarget: ArsipItem | null = null;
+
   const updated = all.map(item => {
     if (item.id === id) {
-      const restoredItem: ArsipItem = {
+      restoredTarget = {
         ...item,
         isTrash: false,
         deletedAt: undefined
       };
-      saveArsipToFirestore(restoredItem).catch(() => {});
-      return restoredItem;
+      return restoredTarget;
     }
     return item;
   });
 
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updated));
+
+  if (restoredTarget) {
+    await saveArsipToFirestore(restoredTarget);
+    await saveArsipToSupabase(restoredTarget).catch(() => {});
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
   }
@@ -490,7 +509,7 @@ export function restoreFromTrashArsipItem(id: string): ArsipItem[] {
 /**
  * Permanently delete document from Firestore, local storage, and IndexedDB
  */
-export function deletePermanentlyArsipItem(id: string): ArsipItem[] {
+export async function deletePermanentlyArsipItem(id: string): Promise<ArsipItem[]> {
   const all = getAllRawArsip();
   const remaining = all.filter(item => item.id !== id);
 
@@ -500,7 +519,8 @@ export function deletePermanentlyArsipItem(id: string): ArsipItem[] {
     localStorage.removeItem(`file_blob_${id}`);
   } catch {}
 
-  deleteArsipFromFirestore(id).catch(() => {});
+  await deleteArsipFromFirestore(id);
+  await deleteArsipFromSupabase(id).catch(() => {});
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
@@ -511,20 +531,21 @@ export function deletePermanentlyArsipItem(id: string): ArsipItem[] {
 /**
  * Empty all items in Trash permanently
  */
-export function emptyTrashArsip(): ArsipItem[] {
+export async function emptyTrashArsip(): Promise<ArsipItem[]> {
   const all = getAllRawArsip();
   const trashed = all.filter(i => i.isTrash === true);
   const activeOnly = all.filter(i => !i.isTrash);
 
-  trashed.forEach(t => {
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(activeOnly));
+
+  for (const t of trashed) {
     fileBlobCache.delete(t.id);
     try {
       localStorage.removeItem(`file_blob_${t.id}`);
     } catch {}
-    deleteArsipFromFirestore(t.id).catch(() => {});
-  });
-
-  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(activeOnly));
+    await deleteArsipFromFirestore(t.id);
+    await deleteArsipFromSupabase(t.id).catch(() => {});
+  }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
@@ -532,8 +553,8 @@ export function emptyTrashArsip(): ArsipItem[] {
   return [];
 }
 
-export function deleteArsipItem(id: string): ArsipItem[] {
-  return moveToTrashArsipItem(id);
+export async function deleteArsipItem(id: string): Promise<ArsipItem[]> {
+  return await moveToTrashArsipItem(id);
 }
 
 // =====================================================================

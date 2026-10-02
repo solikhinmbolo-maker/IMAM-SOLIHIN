@@ -71,6 +71,14 @@ import {
   testFirestoreConnection,
   saveArsipToFirestore
 } from './firebase';
+import {
+  getStoredSupabaseConfig,
+  saveStoredSupabaseConfig,
+  testSupabaseConnection,
+  subscribeToSupabaseArsip,
+  SUPABASE_SQL_SCHEMA,
+  sanitizeSupabaseUrl
+} from './supabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan' | 'sampah';
 type SubKategori = 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -225,6 +233,34 @@ export default function App() {
   const [isTestingConn, setIsTestingConn] = useState(false);
   const [dbVersion, setDbVersion] = useState(0);
 
+  // Supabase PostgreSQL Config
+  const [supabaseConfig, setSupabaseConfig] = useState(() => getStoredSupabaseConfig());
+  const [supabaseTestStatus, setSupabaseTestStatus] = useState<string>('');
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [copiedSqlSchema, setCopiedSqlSchema] = useState(false);
+
+  const handleTestSupabaseConnection = async () => {
+    setIsTestingSupabase(true);
+    setSupabaseTestStatus('Menghubungkan ke Supabase PostgreSQL Cloud...');
+    
+    // Auto fix .com to .co in state
+    const cleanUrl = sanitizeSupabaseUrl(supabaseConfig.url);
+    if (cleanUrl !== supabaseConfig.url) {
+      handleSaveSupabaseConfig(cleanUrl, supabaseConfig.anonKey);
+    }
+
+    const result = await testSupabaseConnection();
+    setSupabaseTestStatus(result.message);
+    setIsTestingSupabase(false);
+  };
+
+  const handleSaveSupabaseConfig = (url: string, anonKey: string) => {
+    const cleanUrl = sanitizeSupabaseUrl(url);
+    const updated = { ...supabaseConfig, url: cleanUrl, anonKey };
+    setSupabaseConfig(updated);
+    saveStoredSupabaseConfig(updated);
+  };
+
   // Real-time Cloud Database Listeners (Multi-Device Auto Sync)
   useEffect(() => {
     testFirestoreConnection();
@@ -246,11 +282,6 @@ export default function App() {
 
           if (activeBlob) {
             saveFileAttachment(it.id, activeBlob);
-          }
-
-          // Auto-heal file attachment base64 to Cloud Firestore if local has it but remote lacks it
-          if (!it.fileDataUrl && existingLocal?.fileDataUrl) {
-            saveArsipToFirestore({ ...it, fileDataUrl: existingLocal.fileDataUrl }).catch(() => {});
           }
 
           updatedList.push({
@@ -294,10 +325,38 @@ export default function App() {
       }
     });
 
+    const unsubSupabase = subscribeToSupabaseArsip((supabaseItems) => {
+      try {
+        if (!Array.isArray(supabaseItems) || supabaseItems.length === 0) return;
+
+        const localRaw = getAllRawArsip();
+        const localMap = new Map<string, ArsipItem>();
+        localRaw.forEach(it => localMap.set(it.id, it));
+
+        const mergedList: ArsipItem[] = supabaseItems.map(it => ({
+          ...it,
+          fileDataUrl: it.fileDataUrl || localMap.get(it.id)?.fileDataUrl
+        }));
+
+        const clean = mergedList.map(it => {
+          const copy = { ...it };
+          delete copy.fileDataUrl;
+          return copy;
+        });
+
+        localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(clean));
+        setDbVersion(v => v + 1);
+        window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+      } catch (err) {
+        console.error('Error syncing Supabase items:', err);
+      }
+    });
+
     return () => {
       unsubArsip();
       unsubSiswa();
       unsubGuru();
+      unsubSupabase();
     };
   }, []);
 
@@ -1765,19 +1824,102 @@ function doGet(e) {
                 </div>
               )}
 
-              {/* TAB 4: STATUS SERVER & CLOUD */}
+              {/* TAB 4: STATUS SERVER & CLOUD (SUPABASE + GOOGLE DRIVE) */}
               {settingTab === 'cloud' && (
-                <div className="space-y-4 animate-fadeIn">
-                  <div className="p-4 bg-emerald-50/80 border border-emerald-300/80 rounded-2xl flex items-center gap-3">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
+                <div className="space-y-5 animate-fadeIn">
+                  
+                  {/* Status Banner */}
+                  <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-300/80 rounded-2xl flex items-start gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-bold text-emerald-950">Server Cloud Siap Pakai & Otomatis Terhubung</h4>
-                      <p className="text-[11px] text-emerald-800 mt-0.5">
-                        Aplikasi telah terintegrasi secara permanen dengan Google Drive & Google Spreadsheet. Semua akun guru dan perangkat tidak perlu memasukkan link apapun lagi.
+                      <h4 className="text-xs font-bold text-slate-900">Integrasi Supabase (PostgreSQL) & Google Drive Active</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                        Data arsip disimpan di <strong>Supabase PostgreSQL Cloud</strong> secara relasional, sedangkan file scan/PDF fisik tersimpan aman di <strong>Google Drive Sekolah</strong>.
                       </p>
                     </div>
                   </div>
 
+                  {/* Supabase Configuration Section */}
+                  <div className="p-4 sm:p-5 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <Database className="w-5 h-5 text-emerald-400" />
+                        <div>
+                          <h4 className="text-xs font-bold text-white">Konfigurasi Supabase PostgreSQL</h4>
+                          <p className="text-[10px] text-slate-400">Masukkan Project URL & Anon Key dari Dashboard Supabase Anda</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                        PostgreSQL Cloud
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Supabase Project URL
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="https://xyzxyz.supabase.co"
+                          value={supabaseConfig.url}
+                          onChange={(e) => handleSaveSupabaseConfig(e.target.value, supabaseConfig.anonKey)}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 placeholder-slate-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Supabase Anon Key / Public Key
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="eyJhYmdjZXJ0..."
+                          value={supabaseConfig.anonKey}
+                          onChange={(e) => handleSaveSupabaseConfig(supabaseConfig.url, e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 placeholder-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Supabase */}
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleTestSupabaseConnection}
+                        disabled={isTestingSupabase}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
+                        <span>{isTestingSupabase ? 'Menguji...' : '⚡ Uji Koneksi Supabase'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                          setCopiedSqlSchema(true);
+                          setTimeout(() => setCopiedSqlSchema(false), 3000);
+                        }}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        {copiedSqlSchema ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                        <span>{copiedSqlSchema ? '✓ Script SQL Tersalin!' : '📋 Salin Script SQL Schema'}</span>
+                      </button>
+                    </div>
+
+                    {supabaseTestStatus && (
+                      <div className={`p-3 rounded-xl text-xs font-medium ${
+                        supabaseTestStatus.includes('✓') 
+                          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800' 
+                          : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                      }`}>
+                        {supabaseTestStatus}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Google Drive Status Section */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
                       <div className="flex items-center justify-between mb-2">
@@ -1787,7 +1929,7 @@ function doGet(e) {
                         </span>
                         <span className="w-2 h-2 rounded-full bg-emerald-500" title="Online" />
                       </div>
-                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID: {syncConfig.folderId}</p>
+                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID Folder: {syncConfig.folderId}</p>
                       <a
                         href={`https://drive.google.com/drive/folders/${syncConfig.folderId}`}
                         target="_blank"
@@ -1803,11 +1945,11 @@ function doGet(e) {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                           <FileText className="w-4 h-4 text-emerald-600" />
-                          Google Spreadsheet (Database)
+                          Google Spreadsheet (Backup)
                         </span>
                         <span className="w-2 h-2 rounded-full bg-emerald-500" title="Online" />
                       </div>
-                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID: {syncConfig.spreadsheetId}</p>
+                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID Sheet: {syncConfig.spreadsheetId}</p>
                       <a
                         href={`https://docs.google.com/spreadsheets/d/${syncConfig.spreadsheetId}/edit`}
                         target="_blank"
@@ -1820,20 +1962,6 @@ function doGet(e) {
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <strong className="text-xs font-bold text-slate-800 block">Uji Kecepatan Respon Cloud</strong>
-                      <span className="text-[11px] text-slate-500">{testConnStatus || 'Klik untuk menguji koneksi ke server'}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleTestConnection}
-                      disabled={isTestingConn}
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer flex-shrink-0"
-                    >
-                      {isTestingConn ? 'Menguji...' : '⚡ Cek Koneksi'}
-                    </button>
-                  </div>
                 </div>
               )}
 

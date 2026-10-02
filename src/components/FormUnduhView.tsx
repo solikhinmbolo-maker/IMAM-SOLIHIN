@@ -38,8 +38,8 @@ export default function FormUnduhView({
   const [trashConfirmItem, setTrashConfirmItem] = useState<ArsipItem | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
 
-  const handleMoveToTrash = (item: ArsipItem) => {
-    moveToTrashArsipItem(item.id);
+  const handleMoveToTrash = async (item: ArsipItem) => {
+    await moveToTrashArsipItem(item.id);
     setTrashConfirmItem(null);
   };
 

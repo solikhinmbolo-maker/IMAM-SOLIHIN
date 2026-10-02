@@ -44,8 +44,20 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
+  
+  if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted') || message.includes('RESOURCE_EXHAUSTED')) {
+    console.warn('[Firestore] Quota limit reached for free tier. Falling back to Supabase & local storage cache.');
+    return {
+      error: 'Quota limit exceeded',
+      operationType,
+      path,
+      authInfo: { providerInfo: [] }
+    };
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: message,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -60,7 +72,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.warn('Firestore Error Notice: ', message);
   return errInfo;
 }
 
@@ -79,56 +91,90 @@ export async function testFirestoreConnection(): Promise<boolean> {
 
 // Realtime listeners for Arsip
 export function subscribeToArsip(onUpdate: (items: ArsipItem[]) => void) {
-  const colRef = collection(db, 'arsip');
-  return onSnapshot(colRef, (snapshot) => {
-    const list: ArsipItem[] = [];
-    snapshot.forEach(docSnap => {
-      list.push(docSnap.data() as ArsipItem);
+  try {
+    const colRef = collection(db, 'arsip');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: ArsipItem[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data() as ArsipItem);
+      });
+      onUpdate(list);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'arsip');
     });
-    onUpdate(list);
-  }, (err) => {
+  } catch (err) {
     handleFirestoreError(err, OperationType.LIST, 'arsip');
-  });
+    return () => {};
+  }
 }
 
 // Realtime listeners for Master Siswa
 export function subscribeToMasterSiswa(onUpdate: (items: MasterSiswa[]) => void) {
-  const colRef = collection(db, 'master_siswa');
-  return onSnapshot(colRef, (snapshot) => {
-    const list: MasterSiswa[] = [];
-    snapshot.forEach(docSnap => {
-      list.push(docSnap.data() as MasterSiswa);
+  try {
+    const colRef = collection(db, 'master_siswa');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: MasterSiswa[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data() as MasterSiswa);
+      });
+      onUpdate(list);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'master_siswa');
     });
-    onUpdate(list);
-  }, (err) => {
+  } catch (err) {
     handleFirestoreError(err, OperationType.LIST, 'master_siswa');
-  });
+    return () => {};
+  }
 }
 
 // Realtime listeners for Master Guru
 export function subscribeToMasterGuru(onUpdate: (items: MasterGuru[]) => void) {
-  const colRef = collection(db, 'master_guru');
-  return onSnapshot(colRef, (snapshot) => {
-    const list: MasterGuru[] = [];
-    snapshot.forEach(docSnap => {
-      list.push(docSnap.data() as MasterGuru);
+  try {
+    const colRef = collection(db, 'master_guru');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: MasterGuru[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data() as MasterGuru);
+      });
+      onUpdate(list);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'master_guru');
     });
-    onUpdate(list);
-  }, (err) => {
+  } catch (err) {
     handleFirestoreError(err, OperationType.LIST, 'master_guru');
-  });
+    return () => {};
+  }
 }
 
 // Save Arsip to Firestore
 export async function saveArsipToFirestore(item: ArsipItem): Promise<boolean> {
   try {
     const docRef = doc(db, 'arsip', item.id);
-    await setDoc(docRef, {
-      ...item,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    
+    // Create clean plain JS object with NO undefined values (undefined throws FirebaseError)
+    const cleanData: Record<string, any> = {};
+    Object.entries(item).forEach(([key, val]) => {
+      if (val !== undefined) {
+        cleanData[key] = val;
+      }
+    });
+
+    // Ensure isTrash is explicitly boolean (true or false)
+    cleanData.isTrash = Boolean(item.isTrash);
+    if (!item.isTrash) {
+      cleanData.deletedAt = null;
+    }
+    cleanData.updatedAt = new Date().toISOString();
+
+    // Prevent Firestore 1MB document size limit error if base64 file is large
+    if (typeof cleanData.fileDataUrl === 'string' && cleanData.fileDataUrl.length > 500000) {
+      delete cleanData.fileDataUrl;
+    }
+
+    await setDoc(docRef, cleanData, { merge: true });
     return true;
   } catch (err) {
+    console.error('saveArsipToFirestore Error:', err);
     handleFirestoreError(err, OperationType.WRITE, `arsip/${item.id}`);
     return false;
   }

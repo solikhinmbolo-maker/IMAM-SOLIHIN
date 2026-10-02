@@ -49,20 +49,20 @@ export default function TongSampahView() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  const handleRestore = (item: ArsipItem) => {
-    restoreFromTrashArsipItem(item.id);
+  const handleRestore = async (item: ArsipItem) => {
+    await restoreFromTrashArsipItem(item.id);
     showToast(`✓ Berkas "${item.subjek}" berhasil dipulihkan ke arsip aktif.`);
   };
 
-  const handleConfirmDeletePermanent = () => {
+  const handleConfirmDeletePermanent = async () => {
     if (!deleteTargetItem) return;
-    deletePermanentlyArsipItem(deleteTargetItem.id);
+    await deletePermanentlyArsipItem(deleteTargetItem.id);
     showToast(`🗑️ Berkas "${deleteTargetItem.subjek}" telah dihapus secara permanen dari Database & Cloud.`);
     setDeleteTargetItem(null);
   };
 
-  const handleConfirmEmptyTrash = () => {
-    emptyTrashArsip();
+  const handleConfirmEmptyTrash = async () => {
+    await emptyTrashArsip();
     showToast('🗑️ Seluruh berkas di folder Sampah telah dibersihkan secara permanen.');
     setShowEmptyConfirm(false);
   };
