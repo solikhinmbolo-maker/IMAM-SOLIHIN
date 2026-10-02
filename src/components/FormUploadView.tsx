@@ -49,12 +49,14 @@ import { uploadFileToSupabaseStorage } from '../supabase';
 
 interface FormUploadViewProps {
   initialJenis?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
+  onSelectJenis?: (jenis: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya') => void;
   onUploadSuccess: () => void;
   onCancel: () => void;
 }
 
 export default function FormUploadView({ 
   initialJenis = 'Arsip Siswa', 
+  onSelectJenis,
   onUploadSuccess, 
   onCancel 
 }: FormUploadViewProps) {
@@ -561,25 +563,15 @@ export default function FormUploadView({
     <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/90 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold flex-shrink-0">
             <CloudUpload className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Unggah Berkas Baru</h3>
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs">
-                <span>{jenisArsip === 'Arsip Siswa' ? '🎓' : jenisArsip === 'Arsip Guru' ? '👨‍🏫' : '📁'}</span>
-                <span>{jenisArsip}</span>
-              </span>
-            </div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Unggah Berkas Baru</h3>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              {jenisArsip === 'Arsip Siswa' 
-                ? 'Lampirkan Ijazah, SKL, SPMB, atau berkas kelulusan siswa & alumni'
-                : jenisArsip === 'Arsip Guru'
-                ? 'Lampirkan KTP, KK, Ijazah S1/S2, Serdik, atau dokumen kepegawaian guru'
-                : 'Lampirkan Surat Masuk, Surat Keluar, Proposal, LPJ, atau berkas instansi'}
+              Pilih kategori pengarsipan dan lampirkan berkas dokumen digital
             </p>
           </div>
         </div>
@@ -611,6 +603,45 @@ export default function FormUploadView({
             <span>Upload Kolektif</span>
           </button>
         </div>
+      </div>
+
+      {/* FILTER KATEGORI UPLOAD (Arsip Siswa / Arsip Guru / Arsip Lainnya) */}
+      <div className="p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 mb-6 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'Arsip Siswa', label: 'Arsip Siswa', icon: '🎓' },
+          { id: 'Arsip Guru', label: 'Arsip Guru', icon: '👨‍🏫' },
+          { id: 'Arsip Lainnya', label: 'Arsip Lainnya', icon: '📁' }
+        ].map((cat) => {
+          const active = jenisArsip === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => {
+                const newJenis = cat.id as any;
+                setJenisArsip(newJenis);
+                setKategori('');
+                setNamaSubjek('');
+                setIdentitas('');
+                setNamaDokumen('');
+                setSelectedFile(null);
+                setFileBase64('');
+                setKolektifFiles({});
+                if (onSelectJenis) {
+                  onSelectJenis(newJenis);
+                }
+              }}
+              className={`flex-1 min-w-[105px] py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                active
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <span className="text-sm">{cat.icon}</span>
+              <span className="whitespace-nowrap">{cat.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Error Alert */}

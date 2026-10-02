@@ -10,6 +10,7 @@ import {
   Settings, 
   Power, 
   Menu, 
+  AlignLeft,
   X, 
   ChevronDown, 
   Shield,
@@ -1043,20 +1044,22 @@ function doGet(e) {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-['Poppins'] text-slate-800 antialiased selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
       
-      {/* 1. MOBILE DRAWER OVERLAY */}
-      {(mobileSidebarOpen || mobileProfileSheetOpen) && (
-        <div 
-          onClick={() => {
-            setMobileSidebarOpen(false);
-            setMobileProfileSheetOpen(false);
-          }}
-          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
-        />
-      )}
+      {/* 1. MOBILE DRAWER OVERLAY (Glassmorphism Dark Blur - Covers Entire Viewport Header & Bottom Nav) */}
+      <div 
+        onClick={() => {
+          setMobileSidebarOpen(false);
+          setMobileProfileSheetOpen(false);
+        }}
+        className={`fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-md lg:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          (mobileSidebarOpen || mobileProfileSheetOpen)
+            ? 'opacity-100 pointer-events-auto'
+            : 'opacity-0 pointer-events-none'
+        }`}
+      />
 
       {/* 2. SIDEBAR NAVIGATION (DESKTOP & ACCESSIBLE AS DRAWER) */}
       <aside className={`
-        fixed top-0 bottom-0 left-0 z-50 w-64 bg-[#0F172A] text-slate-200 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
+        fixed top-0 bottom-0 left-0 z-[100] w-72 max-w-[82vw] bg-[#0F172A] text-slate-200 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.95)] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
         ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Sidebar Header with Logo */}
@@ -1325,7 +1328,7 @@ function doGet(e) {
       </aside>
 
       {/* 3. MAIN CONTENT CONTAINER */}
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-screen pb-24 lg:pb-8 w-full max-w-full overflow-x-hidden">
+      <main className={`flex-1 lg:ml-64 flex flex-col min-h-screen pb-24 lg:pb-8 w-full max-w-full overflow-x-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${mobileSidebarOpen ? 'filter blur-[3px] scale-[0.985] lg:filter-none lg:scale-100' : ''}`}>
         
         {/* ============================================================== */}
         {/* DESKTOP HEADER (TETAP SAMA PERSIS DENGAN YANG DISUKAI USER)     */}
@@ -1393,8 +1396,17 @@ function doGet(e) {
 
           <div className="relative z-10 flex items-center justify-between">
             {activePage === 'dashboard' ? (
-              /* Brand & Logo with deep gradient and clean typography */
-              <div className="flex items-center gap-3">
+              /* Brand & Logo with Hamburger Garis 3 Menu Trigger */
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="-ml-1.5 p-1 text-cyan-300 hover:text-white transition-colors cursor-pointer active:scale-90 flex items-center justify-center flex-shrink-0"
+                  title="Buka Menu Lengkap E-Arsip"
+                >
+                  <AlignLeft className="w-6 h-6 text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+                </button>
+
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 p-1 shadow-md shadow-blue-500/30 flex items-center justify-center flex-shrink-0 border border-white/20">
                   <img 
                     src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
@@ -1719,21 +1731,21 @@ function doGet(e) {
           <span className="text-[10px] tracking-tight">Rekap</span>
         </button>
 
-        {/* Laporan */}
+        {/* Setting / Pengaturan Sistem */}
         <button
-          onClick={() => setActivePage('laporan')}
+          onClick={() => setShowSettingModal(true)}
           className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
-            activePage === 'laporan'
+            showSettingModal
               ? 'text-blue-600 font-bold'
               : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           <div className={`p-1.5 rounded-xl transition-all ${
-            activePage === 'laporan' ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
+            showSettingModal ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
           }`}>
-            <BarChart3 className="w-5 h-5" />
+            <Settings className="w-5 h-5" />
           </div>
-          <span className="text-[10px] tracking-tight">Laporan</span>
+          <span className="text-[10px] tracking-tight">Setting</span>
         </button>
       </nav>
 

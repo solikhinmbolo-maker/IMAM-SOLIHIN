@@ -19,13 +19,16 @@ import { ArsipItem, getStoredArsip, moveToTrashArsipItem } from '../data/mockDat
 
 interface FormUnduhViewProps {
   kategoriMenu?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
+  onSelectKategoriMenu?: (kat: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya') => void;
   onPreview: (item: ArsipItem) => void;
 }
 
 export default function FormUnduhView({ 
   kategoriMenu = 'Arsip Siswa', 
+  onSelectKategoriMenu,
   onPreview 
 }: FormUnduhViewProps) {
+  const [activeKategori, setActiveKategori] = useState<'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya'>(kategoriMenu);
   const [filterTahun, setFilterTahun] = useState('SEMUA');
   const [filterJenis, setFilterJenis] = useState('SEMUA');
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +40,10 @@ export default function FormUnduhView({
   const [syncStatus, setSyncStatus] = useState('');
   const [trashConfirmItem, setTrashConfirmItem] = useState<ArsipItem | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    setActiveKategori(kategoriMenu);
+  }, [kategoriMenu]);
 
   const handleMoveToTrash = async (item: ArsipItem) => {
     await moveToTrashArsipItem(item.id);
@@ -55,12 +62,12 @@ export default function FormUnduhView({
   // Filter based on active category
   const scopedData = useMemo(() => {
     return allArsip.filter(item => {
-      if (kategoriMenu) {
-        return item.kategoriUtama === kategoriMenu;
+      if (activeKategori) {
+        return item.kategoriUtama === activeKategori;
       }
       return true;
     });
-  }, [allArsip, kategoriMenu]);
+  }, [allArsip, activeKategori]);
 
   // Distinct Years & Categories for filters
   const distinctTahun = useMemo(() => {
@@ -127,7 +134,7 @@ export default function FormUnduhView({
     <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] border border-slate-200/80 animate-fadeIn font-['Poppins'] max-w-full overflow-x-hidden">
       
       {/* HEADER EMERALD */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 mb-5 border-b-2 border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b-2 border-slate-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-inner flex-shrink-0">
             <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -135,7 +142,7 @@ export default function FormUnduhView({
           <div>
             <h3 className="text-base sm:text-lg font-bold text-emerald-950 flex items-center gap-1.5 flex-wrap">
               <span>Daftar Unduh:</span>
-              <span className="text-emerald-600">{kategoriMenu}</span>
+              <span className="text-emerald-600">{activeKategori}</span>
             </h3>
             <p className="text-[11px] sm:text-xs text-slate-500">Akses, cetak, dan unduh berkas digital</p>
           </div>
@@ -147,6 +154,40 @@ export default function FormUnduhView({
             <span>Terhubung Firebase Cloud</span>
           </div>
         </div>
+      </div>
+
+      {/* FILTER KATEGORI UNDUH (Arsip Siswa / Arsip Guru / Arsip Lainnya) */}
+      <div className="p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 mb-5 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'Arsip Siswa', label: 'Arsip Siswa', icon: '🎓' },
+          { id: 'Arsip Guru', label: 'Arsip Guru', icon: '👨‍🏫' },
+          { id: 'Arsip Lainnya', label: 'Arsip Lainnya', icon: '📁' }
+        ].map((cat) => {
+          const active = activeKategori === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => {
+                const newCat = cat.id as any;
+                setActiveKategori(newCat);
+                setFilterTahun('SEMUA');
+                setFilterJenis('SEMUA');
+                if (onSelectKategoriMenu) {
+                  onSelectKategoriMenu(newCat);
+                }
+              }}
+              className={`flex-1 min-w-[105px] py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                active
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <span className="text-sm">{cat.icon}</span>
+              <span className="whitespace-nowrap">{cat.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* FILTER BERTINGKAT & SMART SEARCH */}
