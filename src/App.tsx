@@ -349,7 +349,7 @@ export default function App() {
 
     const unsubSupabase = subscribeToSupabaseArsip((supabaseItems) => {
       try {
-        if (!Array.isArray(supabaseItems) || supabaseItems.length === 0) return;
+        if (!Array.isArray(supabaseItems)) return;
 
         const localRaw = getAllRawArsip();
         const localMap = new Map<string, ArsipItem>();
@@ -366,6 +366,7 @@ export default function App() {
           return copy;
         });
 
+        // Supabase is the single source of truth across all devices
         localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(clean));
         setDbVersion(v => v + 1);
         window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
