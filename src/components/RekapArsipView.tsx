@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CheckSquare, 
   Search, 
@@ -31,10 +31,17 @@ export default function RekapArsipView({ onPreview }: RekapArsipViewProps) {
   const [targetKelompok, setTargetKelompok] = useState<'Siswa' | 'Guru'>('Siswa');
   const [searchName, setSearchName] = useState('');
   const [mobileViewMode, setMobileViewMode] = useState<'cards' | 'table'>('cards');
+  const [dataVersion, setDataVersion] = useState(0);
 
-  const masterSiswa = getStoredMasterSiswa();
-  const masterGuru = getStoredMasterGuru();
-  const allArsip = getStoredArsip();
+  useEffect(() => {
+    const handleCloudUpdate = () => setDataVersion(v => v + 1);
+    window.addEventListener('earsip:cloud-synced', handleCloudUpdate);
+    return () => window.removeEventListener('earsip:cloud-synced', handleCloudUpdate);
+  }, []);
+
+  const masterSiswa = useMemo(() => getStoredMasterSiswa(), [dataVersion]);
+  const masterGuru = useMemo(() => getStoredMasterGuru(), [dataVersion]);
+  const allArsip = useMemo(() => getStoredArsip(), [dataVersion]);
 
   // Matriks Siswa
   const siswaMatrix = useMemo(() => {

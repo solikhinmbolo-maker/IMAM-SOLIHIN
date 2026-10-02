@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BookOpen, 
   GraduationCap, 
@@ -50,6 +50,16 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
   // Master Data State
   const [siswaList, setSiswaList] = useState<MasterSiswaItem[]>(() => getStoredMasterSiswa());
   const [guruList, setGuruList] = useState<MasterGuruItem[]>(() => getStoredMasterGuru());
+
+  useEffect(() => {
+    const handleCloudUpdate = () => {
+      setSiswaList(getStoredMasterSiswa());
+      setGuruList(getStoredMasterGuru());
+    };
+    window.addEventListener('earsip:cloud-synced', handleCloudUpdate);
+    return () => window.removeEventListener('earsip:cloud-synced', handleCloudUpdate);
+  }, []);
+
   const arsipList = useMemo(() => getStoredArsip(), [siswaList, guruList]);
 
   // Modal State for adding/editing

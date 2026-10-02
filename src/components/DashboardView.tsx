@@ -45,9 +45,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [mobileChartTab, setMobileChartTab] = useState<'kategori' | 'siswa'>('kategori');
   const [mobileQuickSearch, setMobileQuickSearch] = useState('');
 
-  // Memoize data so reference remains stable across parent re-renders
-  const allArsip = useMemo(() => getStoredArsip(), []);
-  const allSiswa = useMemo(() => getStoredMasterSiswa(), []);
+  // Reactive state to update whenever cloud data is synced
+  const [dataVersion, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setDataVersion(v => v + 1);
+    window.addEventListener('earsip:cloud-synced', handleUpdate);
+    return () => window.removeEventListener('earsip:cloud-synced', handleUpdate);
+  }, []);
+
+  // Live data reference
+  const allArsip = useMemo(() => getStoredArsip(), [dataVersion]);
+  const allSiswa = useMemo(() => getStoredMasterSiswa(), [dataVersion]);
 
   // Calculate Metrics
   const totalArsip = allArsip.length;

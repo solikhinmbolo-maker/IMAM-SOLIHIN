@@ -48,7 +48,8 @@ import {
   clearAllArsipData,
   restoreSampleArsipData,
   getStoredArsip,
-  syncItemToGoogleCloud
+  syncItemToGoogleCloud,
+  fetchLiveFullDataFromGoogle
 } from './data/mockDatabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
@@ -463,53 +464,92 @@ function getOrCreateSheet(ss, name, headers) {
   return sheet;
 }
 
-// 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET (DEDUPLIKASI OTOMATIS)
+// 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET (DEDUPLIKASI OTOMATIS & MULTI-DEVICE SINKRON)
 function doGet(e) {
   try {
     var ss = getSpreadsheet();
-    var sheet = ss.getSheetByName('REKAP_SEMUA_ARSIP');
-    if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: 'success', items: [] })).setMimeType(ContentService.MimeType.JSON);
+    
+    // A. BACA REKAP ARSIP
+    var sArsip = ss.getSheetByName('REKAP_SEMUA_ARSIP');
+    var items = [];
+    if (sArsip) {
+      var rows = sArsip.getDataRange().getValues();
+      var seenKeys = {};
+      for (var i = 1; i < rows.length; i++) {
+        var r = rows[i];
+        var subjek = String(r[4] || '').trim();
+        var kat = String(r[5] || '').trim();
+        var key = (subjek + '___' + kat).toLowerCase();
+
+        if (r[0] && subjek && !seenKeys[key]) {
+          seenKeys[key] = true;
+          items.push({
+            id: String(r[0]),
+            tanggal: String(r[1]),
+            tahun: String(r[2]),
+            identitas: String(r[3]),
+            subjek: subjek,
+            kategori: kat,
+            kategoriUtama: String(r[6]),
+            namaFile: String(r[7]),
+            ukuran: String(r[8]),
+            uploader: String(r[9]),
+            driveUrl: String(r[10])
+          });
+        }
+      }
     }
 
-    var rows = sheet.getDataRange().getValues();
-    var items = [];
-    var seenKeys = {};
+    // B. BACA DATA MASTER SISWA
+    var sSiswa = ss.getSheetByName('DATA_MASTER_SISWA');
+    var siswaList = [];
+    if (sSiswa) {
+      var sRows = sSiswa.getDataRange().getValues();
+      for (var j = 1; j < sRows.length; j++) {
+        var sr = sRows[j];
+        if (sr[0] && String(sr[0]).trim() !== '') {
+          siswaList.push({
+            nisn: String(sr[0]),
+            nama: String(sr[1]),
+            tahun: String(sr[2]),
+            kelas: String(sr[3])
+          });
+        }
+      }
+    }
 
-    for (var i = 1; i < rows.length; i++) {
-      var r = rows[i];
-      var subjek = String(r[4] || '').trim();
-      var kat = String(r[5] || '').trim();
-      var key = (subjek + '___' + kat).toLowerCase();
-
-      if (r[0] && subjek && !seenKeys[key]) {
-        seenKeys[key] = true;
-        items.push({
-          id: String(r[0]),
-          tanggal: String(r[1]),
-          tahun: String(r[2]),
-          identitas: String(r[3]),
-          subjek: subjek,
-          kategori: kat,
-          kategoriUtama: String(r[6]),
-          namaFile: String(r[7]),
-          ukuran: String(r[8]),
-          uploader: String(r[9]),
-          driveUrl: String(r[10])
-        });
+    // C. BACA DATA MASTER GURU
+    var sGuru = ss.getSheetByName('DATA_MASTER_GURU');
+    var guruList = [];
+    if (sGuru) {
+      var gRows = sGuru.getDataRange().getValues();
+      for (var k = 1; k < gRows.length; k++) {
+        var gr = gRows[k];
+        if (gr[0] && String(gr[0]).trim() !== '') {
+          guruList.push({
+            nuptk: String(gr[0]),
+            nama: String(gr[1]),
+            jabatan: String(gr[2])
+          });
+        }
       }
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       count: items.length,
-      items: items
+      items: items,
+      siswa: siswaList,
+      guru: guruList
     })).setMimeType(ContentService.MimeType.JSON);
+
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: err.toString(),
-      items: []
+      items: [],
+      siswa: [],
+      guru: []
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }`;
@@ -518,6 +558,61 @@ function doGet(e) {
     setCopiedGAS(true);
     setTimeout(() => setCopiedGAS(false), 3000);
   };
+
+  // State for Real-Time Cloud Synchronization across All Devices
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<{ isSyncing: boolean; lastSync?: string; message?: string }>({
+    isSyncing: false,
+    lastSync: undefined
+  });
+
+  // Auto-Sync Hook: When app loads on any device, or when window regains focus, auto pull latest from Google Spreadsheet
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const performAutoSync = async () => {
+      const cfg = getStoredSyncConfig();
+      if (!cfg.webhookUrl || !cfg.webhookUrl.startsWith('http')) return;
+
+      setCloudSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      try {
+        const res = await fetchLiveFullDataFromGoogle();
+        const nowTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (res.success) {
+          setCloudSyncStatus({
+            isSyncing: false,
+            lastSync: nowTime,
+            message: `Tersinkronkan live (${res.itemsCount} berkas, ${res.siswaCount} siswa)`
+          });
+          setDbVersion(v => v + 1);
+        } else {
+          setCloudSyncStatus(prev => ({ ...prev, isSyncing: false }));
+        }
+      } catch {
+        setCloudSyncStatus(prev => ({ ...prev, isSyncing: false }));
+      }
+    };
+
+    // 1. Run immediately on load / login
+    performAutoSync();
+
+    // 2. Run on tab focus / visibility change (e.g. user opens phone or switches tab)
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        performAutoSync();
+      }
+    };
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+
+    // 3. Periodic background sync every 45 seconds
+    const syncInterval = setInterval(performAutoSync, 45000);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(syncInterval);
+    };
+  }, [currentUser]);
 
   const handleTestConnection = async () => {
     if (!syncConfig.webhookUrl) {
@@ -862,6 +957,27 @@ function doGet(e) {
           </div>
 
           <div className="flex items-center gap-4 sm:gap-5">
+            {/* Live Cloud Sync Indicator (Google Drive & Google Spreadsheet) */}
+            <button
+              onClick={async () => {
+                setCloudSyncStatus(prev => ({ ...prev, isSyncing: true }));
+                const res = await fetchLiveFullDataFromGoogle();
+                const nowTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                setCloudSyncStatus({
+                  isSyncing: false,
+                  lastSync: nowTime,
+                  message: res.success ? `✓ Sinkron (${res.itemsCount} berkas, ${res.siswaCount} siswa)` : `⚠️ ${res.message}`
+                });
+                setDbVersion(v => v + 1);
+              }}
+              disabled={cloudSyncStatus.isSyncing}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-900/80 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Klik untuk menyinkronkan data terbaru dari Google Spreadsheet secara real-time"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${cloudSyncStatus.isSyncing ? 'animate-spin' : ''}`} />
+              <span>{cloudSyncStatus.isSyncing ? 'Menyinkronkan Cloud...' : cloudSyncStatus.lastSync ? `Sinkron (${cloudSyncStatus.lastSync})` : 'Google Cloud Live'}</span>
+            </button>
+
             {/* 30-Min Idle Protection Indicator */}
             <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />

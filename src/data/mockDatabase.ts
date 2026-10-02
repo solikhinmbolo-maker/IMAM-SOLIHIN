@@ -984,6 +984,112 @@ export async function syncAllArsipToGoogleSheet(): Promise<{ success: boolean; m
 }
 
 /**
+ * Fetch full live database (Archives, Siswa Master, Guru Master) from Google Spreadsheet
+ * Ensures all connected devices (Mobile, Tablet, Multiple PCs) always show identical data!
+ */
+export async function fetchLiveFullDataFromGoogle(): Promise<{ 
+  success: boolean; 
+  itemsCount: number; 
+  siswaCount: number; 
+  guruCount: number; 
+  message?: string 
+}> {
+  const config = getStoredSyncConfig();
+  if (!config.webhookUrl || !config.webhookUrl.startsWith('http')) {
+    return { success: false, itemsCount: 0, siswaCount: 0, guruCount: 0, message: 'URL Webhook belum diatur di Pengaturan Google Cloud' };
+  }
+
+  try {
+    const response = await fetch(`${config.webhookUrl}?action=getFullData&t=${Date.now()}`);
+    const data = await response.json();
+
+    if (data && data.status === 'success') {
+      let itemsCount = 0;
+      let siswaCount = 0;
+      let guruCount = 0;
+
+      // 1. Sinkronisasi Berkas Arsip
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        const currentLocal = getStoredArsip();
+        const remoteItems: ArsipItem[] = data.items.map((it: any) => ({
+          id: it.id || `ARS-${Date.now()}`,
+          tanggal: it.tanggal || new Date().toLocaleDateString('id-ID'),
+          tahun: it.tahun || '-',
+          identitas: it.identitas || '-',
+          subjek: it.subjek || '-',
+          kategori: it.kategori || '-',
+          kategoriUtama: (it.kategoriUtama as any) || 'Arsip Siswa',
+          namaFileAsli: it.namaFile || it.namaFileAsli || 'Dokumen',
+          ukuran: it.ukuran || '0 KB',
+          uploader: it.uploader || 'Admin',
+          linkDrive: it.driveUrl || it.linkDrive || '#'
+        }));
+
+        const mergedMap = new Map<string, ArsipItem>();
+        currentLocal.forEach(it => mergedMap.set(it.id, it));
+        remoteItems.forEach(it => {
+          const existing = mergedMap.get(it.id);
+          if (existing && existing.fileDataUrl) {
+            mergedMap.set(it.id, { ...it, fileDataUrl: existing.fileDataUrl });
+          } else {
+            mergedMap.set(it.id, it);
+          }
+        });
+
+        const finalMerged = Array.from(mergedMap.values());
+        safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(finalMerged.map(f => {
+          const c = { ...f };
+          delete c.fileDataUrl;
+          return c;
+        })));
+        itemsCount = finalMerged.length;
+      }
+
+      // 2. Sinkronisasi Data Master Siswa
+      if (Array.isArray(data.siswa) && data.siswa.length > 0) {
+        const remoteSiswa: MasterSiswaItem[] = data.siswa.map((s: any, idx: number) => ({
+          id: `S-${s.nisn || idx + 1}`,
+          nama: s.nama || '-',
+          tahun: s.tahun || '-',
+          kelas: s.kelas || '-',
+          nisn: s.nisn || '-'
+        }));
+        safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(remoteSiswa));
+        siswaCount = remoteSiswa.length;
+      }
+
+      // 3. Sinkronisasi Data Master Guru
+      if (Array.isArray(data.guru) && data.guru.length > 0) {
+        const remoteGuru: MasterGuruItem[] = data.guru.map((g: any, idx: number) => ({
+          id: `G-${g.nuptk || idx + 1}`,
+          nama: g.nama || '-',
+          nuptk: g.nuptk || '-',
+          jabatan: g.jabatan || '-'
+        }));
+        safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(remoteGuru));
+        guruCount = remoteGuru.length;
+      }
+
+      // Emit custom update event so active views re-render smoothly
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+      }
+
+      return { 
+        success: true, 
+        itemsCount, 
+        siswaCount, 
+        guruCount, 
+        message: 'Data 100% tersinkronkan dengan Google Spreadsheet!' 
+      };
+    }
+    return { success: false, itemsCount: 0, siswaCount: 0, guruCount: 0, message: data?.message || 'Gagal membaca data dari Google Spreadsheet' };
+  } catch (err: any) {
+    return { success: false, itemsCount: 0, siswaCount: 0, guruCount: 0, message: err.message || 'Gagal terhubung ke Google Apps Script' };
+  }
+}
+
+/**
  * Fetch live archives directly from Google Spreadsheet / Drive via Webhook
  * Merges with local data and NEVER wipes existing uploaded documents!
  */

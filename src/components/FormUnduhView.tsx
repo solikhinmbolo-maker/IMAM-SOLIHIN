@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FolderOpen, 
   ShieldCheck, 
@@ -35,9 +35,16 @@ export default function FormUnduhView({
   const [isSyncingFromGoogle, setIsSyncingFromGoogle] = useState(false);
   const [isPushingToGoogle, setIsPushingToGoogle] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
+  const [dataVersion, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    const handleCloudUpdate = () => setDataVersion(v => v + 1);
+    window.addEventListener('earsip:cloud-synced', handleCloudUpdate);
+    return () => window.removeEventListener('earsip:cloud-synced', handleCloudUpdate);
+  }, []);
 
   // Get data with strict deduplication
-  const rawArsip = getStoredArsip();
+  const rawArsip = useMemo(() => getStoredArsip(), [dataVersion]);
   const allArsip = useMemo(() => {
     const map = new Map<string, ArsipItem>();
     rawArsip.forEach(item => {
