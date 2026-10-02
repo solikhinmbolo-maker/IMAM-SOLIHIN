@@ -519,20 +519,27 @@ export async function authenticateFromSupabaseDirect(usernameInput: string, pass
         });
 
         if (found) {
-          if (cleanPass === (found.password || '').trim() || cleanPass === 'superadmin123') {
+          if (found.status === 'Nonaktif') {
+            return { success: false, message: 'Akun Anda sedang dinonaktifkan oleh Super Administrator.' };
+          }
+
+          const dbPassword = (found.password || (found.email === 'superadmin' || found.id === 'master-superadmin' ? 'superadmin123' : '')).trim();
+          if (cleanPass === dbPassword) {
             return {
               success: true,
               user: {
                 id: found.id,
                 email: found.email,
                 name: found.nama || found.name,
-                role: found.role || 'Super Administrator',
-                avatarUrl: found.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(found.nama || 'User')}&background=2563eb&color=fff&size=100`
+                role: found.role || 'Administrator Arsip',
+                avatarUrl: (found.avatar_url && !found.avatar_url.includes('ui-avatars.com')) 
+                  ? found.avatar_url 
+                  : getAvatarForUser(found.email, found.nama || found.name)
               },
               message: 'Login berhasil!'
             };
           } else {
-            return { success: false, message: 'Password salah! Periksa kembali kata sandi akun Anda.' };
+            return { success: false, message: 'Username / Paswword tidak sesuai, silahkan coba lagi..!' };
           }
         }
       }
@@ -541,7 +548,7 @@ export async function authenticateFromSupabaseDirect(usernameInput: string, pass
     }
   }
 
-  return { success: false, message: 'Username tidak ditemukan di database Supabase.' };
+  return { success: false, message: 'Username / Paswword tidak sesuai, silahkan coba lagi..!' };
 }
 
 /**

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock, ShieldCheck, HelpCircle, Send, User, ArrowLeft } from 'lucide-react';
 import { getStoredUserList, saveStoredUserList } from './UserManagementModal';
 import { fetchUsersFromSupabase, authenticateFromSupabaseDirect } from '../supabase';
 
@@ -16,11 +16,13 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  // Modals
+  // Modals for Reset Password via WhatsApp Admin (081998245759)
   const [showResetModal, setShowResetModal] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
+  const [resetName, setResetName] = useState('');
+  const [resetNewUsername, setResetNewUsername] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetSuccessMsg, setResetSuccessMsg] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
   
   const [showGoogleModal, setShowGoogleModal] = useState(false);
 
@@ -120,7 +122,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
 
       const validPassword = matchedUser.password || (matchedUser.id === 'master-superadmin' ? 'superadmin123' : '');
 
-      if (password.trim() === (validPassword || '').trim() || password === 'superadmin123') {
+      if (password.trim() === (validPassword || '').trim()) {
         onLoginSuccess({
           email: matchedUser.email,
           name: matchedUser.name,
@@ -129,26 +131,47 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
         });
         return;
       } else {
-        setErrorMessage('Password salah! Periksa kembali kata sandi Anda.');
+        setErrorMessage('Username / Paswword tidak sesuai, silahkan coba lagi..!');
         return;
       }
     }
 
-    setErrorMessage(directResult.message || 'Username tidak terdaftar di database Supabase!');
+    setErrorMessage('Username / Paswword tidak sesuai, silahkan coba lagi..!');
   };
 
-  const handleKirimReset = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail.trim()) return;
+  const handleOpenResetModal = () => {
+    setResetStep(1);
+    setResetName('');
+    setResetNewUsername('');
+    setResetNewPassword('');
+    setShowResetModal(true);
+  };
 
-    setResetLoading(true);
-    setTimeout(() => {
-      setResetLoading(false);
-      setShowResetModal(false);
-      setResetSuccessMsg(`Permohonan reset sandi ${resetEmail} telah diteruskan ke WhatsApp Admin.`);
-      setResetEmail('');
-      setTimeout(() => setResetSuccessMsg(''), 6000);
-    }, 900);
+  const handleKirimWA = (e: React.FormEvent) => {
+    e.preventDefault();
+    const namaClean = resetName.trim();
+    const usernameClean = resetNewUsername.trim();
+    const passwordClean = resetNewPassword.trim();
+
+    if (!namaClean || !usernameClean || !passwordClean) {
+      alert('Silakan lengkapi Nama, New User Name, dan New Password.');
+      return;
+    }
+
+    const pesan = `Mohon maaf Admin E-ARSIP AL-HIKAM, saya ingin mengajukan permohonan untuk reset/perubahan password akun E-ARSIP AL-HIKAM karena saya lupa password akun saya.
+Nama : ${namaClean}
+New User Name : ${usernameClean}
+New pasword : ${passwordClean}
+Mohon bantuan Admin untuk melakukan reset/perubahan password tersebut. Terima kasih`;
+
+    const waPhone = '6281994285759';
+    const waUrl = `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(pesan)}`;
+
+    window.open(waUrl, '_blank');
+
+    setShowResetModal(false);
+    setResetSuccessMsg('Permohonan telah dibuat dan dialihkan langsung ke WhatsApp Admin (081994285759).');
+    setTimeout(() => setResetSuccessMsg(''), 7000);
   };
 
   return (
@@ -164,52 +187,49 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
       <div className="absolute top-1/3 left-1/4 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Login Card Glassmorphism - Compact, Balanced, & Non-Stretched */}
-      <div className="relative z-10 w-full max-w-[400px] bg-[#0F172A]/90 backdrop-blur-2xl border border-cyan-500/30 rounded-3xl p-5 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.6),0_0_30px_rgba(6,182,212,0.15)] my-auto animate-scaleUp">
+      {/* Login Card Glassmorphism - Fixed Height & Dimension Lock for Desktop & Mobile */}
+      <div className="relative z-10 w-full max-w-[410px] min-h-[580px] sm:min-h-[600px] bg-[#0F172A]/90 backdrop-blur-2xl border border-cyan-500/30 rounded-3xl p-5 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.6),0_0_30px_rgba(6,182,212,0.15)] my-auto animate-scaleUp flex flex-col justify-between">
         
-        {/* Header with Logo */}
-        <div className="text-center mb-4 sm:mb-5">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-2 relative">
-            <div className="absolute inset-0 bg-cyan-400/20 rounded-full blur-lg" />
-            <img 
-              src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
-              alt="Logo SMP Al-Hikam" 
-              className="w-full h-full object-contain relative z-10 drop-shadow-[0_4px_10px_rgba(6,182,212,0.4)]"
-            />
+        <div>
+          {/* Header with Logo */}
+          <div className="text-center mb-4 sm:mb-5">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-2 relative">
+              <div className="absolute inset-0 bg-cyan-400/20 rounded-full blur-lg" />
+              <img 
+                src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
+                alt="Logo SMP Al-Hikam" 
+                className="w-full h-full object-contain relative z-10 drop-shadow-[0_4px_10px_rgba(6,182,212,0.4)]"
+              />
+            </div>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
+              E-ARSIP <span className="text-cyan-400">AL-HICAM</span>
+            </h1>
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">Sistem Informasi Manajemen Digital SMP Al-Hikam</p>
+            <div className="h-0.5 w-12 bg-gradient-to-r from-transparent via-cyan-400 to-transparent mx-auto mt-2" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
-            E-ARSIP <span className="text-cyan-400">AL-HICAM</span>
-          </h1>
-          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">Sistem Informasi Manajemen Digital SMP Al-Hikam</p>
-          <div className="h-0.5 w-12 bg-gradient-to-r from-transparent via-cyan-400 to-transparent mx-auto mt-2" />
-        </div>
 
-        {/* Session Timeout Alert */}
-        {sessionNotice && (
-          <div className="mb-3.5 p-3 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-xs flex items-start gap-2.5 animate-fadeIn">
-            <Clock className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-            <span className="leading-snug">{sessionNotice}</span>
+          {/* Reserved Fixed Alert Slot (Prevents card from jumping/expanding when messages appear) */}
+          <div className="min-h-[48px] mb-3 flex items-center justify-center">
+            {errorMessage ? (
+              <div className="w-full p-2.5 bg-red-500/15 border border-red-500/40 rounded-xl text-red-300 text-xs flex items-center gap-2 animate-bounce">
+                <ShieldAlert className="w-4 h-4 flex-shrink-0 text-red-400" />
+                <span className="leading-tight">{errorMessage}</span>
+              </div>
+            ) : resetSuccessMsg ? (
+              <div className="w-full p-2.5 bg-emerald-500/15 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                <span className="truncate">{resetSuccessMsg}</span>
+              </div>
+            ) : sessionNotice ? (
+              <div className="w-full p-2.5 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-xs flex items-start gap-2.5 animate-fadeIn">
+                <Clock className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span className="leading-snug">{sessionNotice}</span>
+              </div>
+            ) : null}
           </div>
-        )}
 
-        {/* Success Alert */}
-        {resetSuccessMsg && (
-          <div className="mb-3.5 p-2.5 bg-emerald-500/15 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center gap-2 animate-fadeIn">
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-            <span className="truncate">{resetSuccessMsg}</span>
-          </div>
-        )}
-
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="mb-3.5 p-2.5 bg-red-500/15 border border-red-500/40 rounded-xl text-red-300 text-xs flex items-center gap-2 animate-bounce">
-            <ShieldAlert className="w-4 h-4 flex-shrink-0 text-red-400" />
-            <span className="leading-tight">{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Form Login */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Form Login */}
+          <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
             <label className="block text-[11px] font-semibold text-slate-300 mb-1">Email / Username</label>
             <div className="relative flex items-center">
@@ -261,7 +281,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
             </label>
             <button
               type="button"
-              onClick={() => setShowResetModal(true)}
+              onClick={handleOpenResetModal}
               className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors"
             >
               Lupa sandi?
@@ -288,10 +308,10 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
           </button>
         </form>
 
-        {/* Compact Default Credentials Pill */}
+        {/* Portal Info Pill */}
         <div className="mt-3.5 p-2 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-[10px] sm:text-[11px] text-cyan-300 text-center flex items-center justify-center gap-1.5">
-          <KeyRound className="w-3 h-3 text-cyan-400 flex-shrink-0" />
-          <span>Akun Utama: <strong className="text-white font-mono">superadmin</strong> / <strong className="text-white font-mono">superadmin123</strong></span>
+          <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+          <span>Portal Resmi E-Arsip • Masuk dengan Akun Terdaftar</span>
         </div>
 
         {/* Divider */}
@@ -302,6 +322,8 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
           <div className="relative flex justify-center text-[9px] uppercase font-bold text-slate-400">
             <span className="bg-[#0F172A] px-2.5 tracking-wider">ATAU</span>
           </div>
+        </div>
+
         </div>
 
         {/* Google Workspace Button */}
@@ -320,46 +342,126 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
         </button>
       </div>
 
-      {/* Modal Reset Password */}
+      {/* Modal Reset Password Flow (Step 1: Pertanyaan, Step 2: Form Input -> WA Admin 081998245759) */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp">
-            <div className="w-14 h-14 rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(6,182,212,0.25)]">
-              <Lock className="w-6 h-6" />
-            </div>
-            <h3 className="text-base sm:text-lg font-bold text-white mb-1.5">Reset Password</h3>
-            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              Masukkan email Anda untuk mengirimkan permohonan reset password langsung ke WhatsApp Admin E-Arsip.
-            </p>
-            <form onSubmit={handleKirimReset}>
-              <div className="relative mb-4 text-left">
-                <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                <input
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="Masukkan Email Anda"
-                  required
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs sm:text-sm focus:outline-none focus:border-cyan-400"
-                />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 sm:p-7 max-w-md w-full text-center shadow-2xl animate-scaleUp">
+            
+            {resetStep === 1 ? (
+              /* STEP 1: Pertanyaan Konfirmasi */
+              <div className="space-y-5">
+                <div className="w-14 h-14 rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(6,182,212,0.25)]">
+                  <HelpCircle className="w-7 h-7" />
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    Permohonan Perubahan Akun
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-semibold px-2">
+                    "Apakah anda ingin mengajukan perubahan username / pw kepada admin"
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(2)}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Konfirmasi</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowResetModal(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={resetLoading}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-semibold rounded-xl shadow-md transition-all cursor-pointer"
-                >
-                  {resetLoading ? 'Mengirim...' : 'Kirim ke Admin'}
-                </button>
+            ) : (
+              /* STEP 2: Form Nama, New User Name, New Password */
+              <div className="space-y-4 text-left">
+                <div className="text-center space-y-1 pb-1">
+                  <div className="w-12 h-12 rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center mx-auto mb-2">
+                    <KeyRound className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">Form Pengajuan Perubahan Akun</h3>
+                  <p className="text-[11px] text-slate-400">Silakan isi data pengajuan perubahan akun di bawah ini:</p>
+                </div>
+
+                <form onSubmit={handleKirimWA} className="space-y-3.5">
+                  {/* Nama */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Nama :</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={resetName}
+                      onChange={(e) => setResetName(e.target.value)}
+                      placeholder="Masukkan Nama Lengkap Anda"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-400 font-medium"
+                    />
+                  </div>
+
+                  {/* New User Name */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>New User Name :</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={resetNewUsername}
+                      onChange={(e) => setResetNewUsername(e.target.value)}
+                      placeholder="Masukkan Username Baru Yang Diinginkan"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  {/* New Password */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>New pasword :</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="Masukkan Password Baru Yang Diinginkan"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setResetStep(1)}
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Kembali</span>
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>KIRIM</span>
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
+            )}
+
           </div>
         </div>
       )}
