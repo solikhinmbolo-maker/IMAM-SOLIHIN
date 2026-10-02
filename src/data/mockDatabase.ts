@@ -849,7 +849,7 @@ export interface GoogleSyncConfig {
 }
 
 export const DEFAULT_SYNC_CONFIG: GoogleSyncConfig = {
-  webhookUrl: 'https://script.google.com/macros/s/AKfycbwU3DV3GiP_H3vmiCgL9xdWZUP4SPYSkntsyVPCOq3RUlivn4JB8F-30ccdC2uWevRo/exec',
+  webhookUrl: 'https://script.google.com/macros/s/AKfycbyqQcpSe1n4Z9h8dmSYD65g5YfwD-x5k314VEC_2Ia_Cx0VOobk851R0WGxMUd-ATcL/exec',
   folderId: '1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ',
   spreadsheetId: '1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI',
   autoSync: true
@@ -862,7 +862,7 @@ export function getStoredSyncConfig(): GoogleSyncConfig {
     const raw = localStorage.getItem(DB_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      parsed.webhookUrl = DEFAULT_SYNC_CONFIG.webhookUrl;
+      parsed.webhookUrl = 'https://script.google.com/macros/s/AKfycbyqQcpSe1n4Z9h8dmSYD65g5YfwD-x5k314VEC_2Ia_Cx0VOobk851R0WGxMUd-ATcL/exec';
       parsed.folderId = DEFAULT_SYNC_CONFIG.folderId;
       parsed.spreadsheetId = DEFAULT_SYNC_CONFIG.spreadsheetId;
       return parsed;

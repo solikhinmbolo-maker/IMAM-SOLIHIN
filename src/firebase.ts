@@ -199,6 +199,7 @@ export async function saveSiswaToFirestore(siswa: MasterSiswa): Promise<boolean>
     await setDoc(docRef, siswa, { merge: true });
     return true;
   } catch (err) {
+    console.warn('saveSiswaToFirestore quota/write notice:', err);
     handleFirestoreError(err, OperationType.WRITE, `master_siswa/${siswa.id || siswa.nisn}`);
     return false;
   }
@@ -211,6 +212,7 @@ export async function saveGuruToFirestore(guru: MasterGuru): Promise<boolean> {
     await setDoc(docRef, guru, { merge: true });
     return true;
   } catch (err) {
+    console.warn('saveGuruToFirestore quota/write notice:', err);
     handleFirestoreError(err, OperationType.WRITE, `master_guru/${guru.id || guru.nuptk}`);
     return false;
   }

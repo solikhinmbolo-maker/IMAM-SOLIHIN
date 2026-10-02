@@ -207,11 +207,12 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
   if (!item) return null;
 
   const isPdf = (fileData && fileData.startsWith('data:application/pdf')) || 
-                (blobUrl && blobUrl.startsWith('blob:')) ||
                 (item.namaFileAsli && item.namaFileAsli.toLowerCase().endsWith('.pdf'));
 
-  const isImage = (fileData && fileData.startsWith('data:image')) || 
-                  (item.namaFileAsli && /\.(jpe?g|png|webp|gif|bmp)$/i.test(item.namaFileAsli));
+  const isGeneratedSvg = fileData && fileData.startsWith('data:image/svg+xml');
+
+  const isImage = !isGeneratedSvg && ((fileData && fileData.startsWith('data:image')) || 
+                  (item.namaFileAsli && /\.(jpe?g|png|webp|gif|bmp)$/i.test(item.namaFileAsli)));
 
   const handleOpenFullscreen = () => {
     if (blobUrl) {
@@ -362,7 +363,30 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
             /* 1. TAMPILAN BERKAS ASLI (PDF / GAMBAR)                          */
             /* ============================================================== */
             (blobUrl || fileData) ? (
-              isImage ? (
+              isGeneratedSvg ? (
+                <div className="w-full h-full flex flex-col items-center justify-start gap-4 p-2 overflow-auto">
+                  <div className="w-full max-w-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 px-4 py-3 rounded-2xl flex items-center justify-between text-xs gap-3 shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                      <span>Berkas fisik asli (JPEG/PNG/PDF) belum ada di memori. Menampilkan Lembar Verifikasi Resmik.</span>
+                    </div>
+                    <label className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer shrink-0 transition-all shadow-md">
+                      Pilih Berkas Asli
+                      <input 
+                        type="file" 
+                        accept="image/*,.pdf" 
+                        className="hidden" 
+                        onChange={handleCustomFileUpload} 
+                      />
+                    </label>
+                  </div>
+                  <img
+                    src={fileData}
+                    alt={item.namaFileAsli}
+                    className="max-h-[75vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-700 bg-white"
+                  />
+                </div>
+              ) : isImage ? (
                 <div className="w-full h-full flex items-center justify-center p-2 overflow-auto">
                   <img
                     src={fileData || blobUrl}
