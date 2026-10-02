@@ -158,11 +158,18 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
       return;
     }
 
-    const pesan = `Mohon maaf Admin E-ARSIP AL-HIKAM, saya ingin mengajukan permohonan untuk reset/perubahan password akun E-ARSIP AL-HIKAM karena saya lupa password akun saya.
-Nama : ${namaClean}
-New User Name : ${usernameClean}
-New pasword : ${passwordClean}
-Mohon bantuan Admin untuk melakukan reset/perubahan password tersebut. Terima kasih`;
+    const pesan = `*PERMOHONAN RESET AKUN E-ARSIP AL-HIKAM*
+
+Mohon maaf Admin E-ARSIP AL-HIKAM, saya ingin mengajukan permohonan reset / perubahan password akun E-Arsip karena saya lupa password akun saya.
+
+📌 *RINCIAN PENGAJUAN AKUN:*
+• *Nama*                 : ${namaClean}
+• *New User Name*        : ${usernameClean}
+• *New Password*         : ${passwordClean}
+
+Mohon bantuan Admin untuk melakukan proses reset / perubahan password akun tersebut. Terima kasih.
+
+_# Digital E Arsip Alhicam_`;
 
     const waPhone = '6281994285759';
     const waUrl = `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(pesan)}`;
