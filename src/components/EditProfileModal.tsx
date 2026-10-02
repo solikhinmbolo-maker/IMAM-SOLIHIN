@@ -192,7 +192,16 @@ export default function EditProfileModal({
       }
 
       // 2. Simpan ke database Supabase (jika tabel users tersedia)
-      await saveUserProfileToSupabase(updatedUser).catch(() => {});
+      await saveUserProfileToSupabase({
+        name: cleanName,
+        email: cleanEmail,
+        role: updatedUser.role,
+        avatarUrl: avatarUrl,
+        password: password || undefined
+      }).catch(() => {});
+
+      // Broadcast perubahan profil ke semua tab
+      window.dispatchEvent(new Event('storage'));
 
       // 3. Catat di Audit Log Sistem
       addAuditLog({

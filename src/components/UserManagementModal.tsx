@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   Save
 } from 'lucide-react';
-import { addAuditLog } from '../data/mockDatabase';
+import { addAuditLog, DB_KEYS } from '../data/mockDatabase';
 import { syncAllUsersToSupabase, saveSingleUserToSupabase, deleteUserFromSupabase, fetchUsersFromSupabase } from '../supabase';
 
 export interface SystemUser {
@@ -269,7 +269,8 @@ export default function UserManagementModal({
 
     } else if (editingUser) {
       // 2. EDIT AKUN SPESIFIK BERDASARKAN ID
-      const isMasterAdmin = editingUser.id === 'master-superadmin' || editingUser.email.toLowerCase() === 'superadmin';
+      const isMasterAdmin = editingUser.id === 'master-superadmin' || editingUser.email.toLowerCase() === 'superadmin' || editingUser.isSuperAdmin;
+      const isSelf = isMasterAdmin || editingUser.email.toLowerCase() === currentUser.email.toLowerCase() || cleanEmail === currentUser.email.toLowerCase();
 
       updatedList = users.map(u => {
         if (u.id === editingUser.id) {
@@ -286,12 +287,12 @@ export default function UserManagementModal({
         return u;
       });
 
-      // Jika yang diedit adalah akun master Solikhin Mbolo (Superadmin) yang sedang aktif:
-      if (isMasterAdmin) {
+      // Jika yang diedit adalah akun yang sedang aktif (termasuk Solikhin Mbolo / Superadmin):
+      if (isSelf) {
         const updatedSelf = {
           name: cleanName,
           email: cleanEmail,
-          role: 'Super Administrator',
+          role: isMasterAdmin ? 'Super Administrator' : formRole,
           avatarUrl: formAvatar
         };
 
@@ -301,11 +302,12 @@ export default function UserManagementModal({
         const newAdminAcc = {
           name: cleanName,
           email: cleanEmail,
-          role: 'Super Administrator',
+          role: isMasterAdmin ? 'Super Administrator' : formRole,
           avatarUrl: formAvatar,
-          password: formPassword || 'superadmin123'
+          password: formPassword || (editingUser.password || 'superadmin123')
         };
         localStorage.setItem('EARSIP_ADMIN_ACCOUNT', JSON.stringify(newAdminAcc));
+        localStorage.setItem(DB_KEYS.AUTH_USER, JSON.stringify(updatedSelf));
       }
 
       addAuditLog({
@@ -323,18 +325,22 @@ export default function UserManagementModal({
     setUsers(updatedList);
     saveStoredUserList(updatedList);
 
-    // Simpan langsung ke Supabase Cloud (tabel public.users)
+    // Simpan langsung ke Supabase Cloud (tabel public.users) beserta foto profil
     saveSingleUserToSupabase({
       name: cleanName,
       email: cleanEmail,
-      role: isCreatingNew ? formRole : (editingUser?.id === 'master-superadmin' ? 'Super Administrator' : formRole),
-      password: formPassword || (editingUser?.password || 'superadmin123')
+      role: isCreatingNew ? formRole : ((editingUser?.id === 'master-superadmin' || editingUser?.isSuperAdmin) ? 'Super Administrator' : formRole),
+      password: formPassword || (editingUser?.password || 'superadmin123'),
+      avatarUrl: formAvatar
     }).catch(() => {});
 
     // Sinkronkan seluruh list ke database Supabase
     syncAllUsersToSupabase(updatedList).catch(() => {});
 
-    setMessage({ type: 'success', text: `✓ Akun ${cleanName} berhasil disimpan dan langsung masuk ke tabel Supabase!` });
+    // Broadcast ke semua tab
+    window.dispatchEvent(new Event('storage'));
+
+    setMessage({ type: 'success', text: `✓ Akun ${cleanName} & foto profil berhasil disimpan dan disinkronkan ke Supabase!` });
     setTimeout(() => {
       handleCancelForm();
     }, 700);

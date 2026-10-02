@@ -285,14 +285,26 @@ export async function saveSingleUserToSupabase(user: { id?: string; name: string
 
     if (existing && existing.id) {
       // Update data baris yang sudah ada
-      const { error } = await client
+      const updateData: any = {
+        nama: cleanName,
+        password: cleanPassword,
+        role: cleanRole
+      };
+      if (user.avatarUrl) {
+        updateData.avatar_url = user.avatarUrl;
+      }
+
+      let { error } = await client
         .from('users')
-        .update({
-          nama: cleanName,
-          password: cleanPassword,
-          role: cleanRole
-        })
+        .update(updateData)
         .eq('id', existing.id);
+
+      // Jika error karena kolom avatar_url tidak ada di tabel Supabase, coba update tanpa kolom itu
+      if (error && (error.message.includes('avatar_url') || error.code === '42703')) {
+        delete updateData.avatar_url;
+        const retry = await client.from('users').update(updateData).eq('id', existing.id);
+        error = retry.error;
+      }
       return !error;
     } else {
       // Insert data akun baru ke Supabase
@@ -302,9 +314,20 @@ export async function saveSingleUserToSupabase(user: { id?: string; name: string
         password: cleanPassword,
         role: cleanRole
       };
-      const { error } = await client
+      if (user.avatarUrl) {
+        insertPayload.avatar_url = user.avatarUrl;
+      }
+
+      let { error } = await client
         .from('users')
         .insert(insertPayload);
+
+      // Jika error karena kolom avatar_url tidak ada di tabel Supabase, coba insert tanpa kolom itu
+      if (error && (error.message.includes('avatar_url') || error.code === '42703')) {
+        delete insertPayload.avatar_url;
+        const retry = await client.from('users').insert(insertPayload);
+        error = retry.error;
+      }
       return !error;
     }
   } catch (err) {
