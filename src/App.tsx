@@ -1372,6 +1372,9 @@ function doGet(e) {
                   src={currentUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=100`}
                   alt="Avatar"
                   className="w-10 h-10 rounded-full border-2 border-white/80 group-hover:border-cyan-400 object-cover shadow transition-colors"
+                  onError={(e) => {
+                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=3b82f6&color=fff&size=100`;
+                  }}
                 />
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900" title="Online" />
               </div>

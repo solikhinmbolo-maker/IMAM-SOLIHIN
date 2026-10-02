@@ -735,6 +735,9 @@ export default function UserManagementModal({
                         src={u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=2563eb&color=fff&size=100`}
                         alt={u.name}
                         className="w-10 h-10 rounded-xl object-cover border border-slate-700 flex-shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=2563eb&color=fff&size=100`;
+                        }}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">

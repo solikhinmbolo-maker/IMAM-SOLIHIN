@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { ArsipItem, MasterSiswaItem, MasterGuruItem, getAvatarForUser, saveAvatarForUser } from './data/mockDatabase';
+import { ArsipItem, MasterSiswaItem, MasterGuruItem, getAvatarForUser, saveAvatarForUser, sanitizeUserStorageKey, getPublicStorageAvatarUrl } from './data/mockDatabase';
 
 export interface SupabaseConfig {
   url: string;
@@ -285,10 +285,12 @@ export async function saveSingleUserToSupabase(
 
   try {
     // Auto-upload photo profile base64 to Supabase Storage bucket 'arsip' to get public HTTP link for cross-device sync
-    let publicAvatarUrl = user.avatarUrl || '';
+    const avatarKey = sanitizeUserStorageKey(cleanEmail);
+    let publicAvatarUrl = user.avatarUrl || getPublicStorageAvatarUrl(avatarKey);
+
     if (user.avatarUrl && user.avatarUrl.startsWith('data:image')) {
       try {
-        const uploadRes = await uploadFileToSupabaseStorage(`pp_${cleanEmail}`, `avatar_${cleanEmail}.jpg`, user.avatarUrl);
+        const uploadRes = await uploadFileToSupabaseStorage(`pp_${avatarKey}`, `avatar_${avatarKey}.jpg`, user.avatarUrl);
         if (uploadRes.success && uploadRes.publicUrl) {
           publicAvatarUrl = uploadRes.publicUrl;
         }
@@ -299,6 +301,7 @@ export async function saveSingleUserToSupabase(
 
     if (publicAvatarUrl) {
       saveAvatarForUser(cleanEmail, publicAvatarUrl);
+      saveAvatarForUser(avatarKey, publicAvatarUrl);
       if (cleanEmail === 'superadmin' || user.id === 'master-superadmin') {
         saveAvatarForUser('superadmin', publicAvatarUrl);
       }

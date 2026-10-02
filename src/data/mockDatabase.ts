@@ -952,53 +952,48 @@ export function saveStoredSyncConfig(cfg: GoogleSyncConfig) {
 // PERSISTENT AVATAR / PROFILE PICTURE STORAGE
 // =====================================================================
 
+export function sanitizeUserStorageKey(input: string): string {
+  if (!input) return 'user';
+  const clean = input.toLowerCase().trim().replace(/^@/, '');
+  const key = clean.replace(/[^a-z0-9]/g, '');
+  return key || 'user';
+}
+
+export function getPublicStorageAvatarUrl(emailOrUsername: string): string {
+  const key = sanitizeUserStorageKey(emailOrUsername);
+  return `https://ynlcaasuybwscbikjmzt.supabase.co/storage/v1/object/public/arsip/pp_${key}_avatar_${key}.jpg`;
+}
+
 export function getAvatarForUser(emailOrUsername: string, name?: string): string {
+  const key = sanitizeUserStorageKey(emailOrUsername);
+
+  // 1. Check local cache in EARSIP_AVATARS_MAP (if base64 or custom URL exists on this device)
   try {
-    const cleanKey = (emailOrUsername || '').toLowerCase().trim().replace(/^@/, '');
-    
-    // 1. Dedicated avatar map
-    const avatarsMapRaw = localStorage.getItem('EARSIP_AVATARS_MAP');
-    if (avatarsMapRaw) {
-      const avatarsMap = JSON.parse(avatarsMapRaw);
-      if (avatarsMap[cleanKey] && !avatarsMap[cleanKey].includes('ui-avatars.com')) {
-        return avatarsMap[cleanKey];
+    const raw = localStorage.getItem('EARSIP_AVATARS_MAP');
+    if (raw) {
+      const map = JSON.parse(raw);
+      if (map[key] && !map[key].includes('ui-avatars.com')) {
+        return map[key];
       }
-    }
-
-    // 2. Admin account storage
-    const adminAccRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
-    if (adminAccRaw) {
-      const parsed = JSON.parse(adminAccRaw);
-      if (parsed?.avatarUrl && !parsed.avatarUrl.includes('ui-avatars.com') && (cleanKey === 'superadmin' || cleanKey === (parsed.email || '').toLowerCase().replace(/^@/, ''))) {
-        return parsed.avatarUrl;
-      }
-    }
-
-    // 3. User list storage
-    const userListRaw = localStorage.getItem('EARSIP_USER_LIST');
-    if (userListRaw) {
-      const parsedList = JSON.parse(userListRaw);
-      if (Array.isArray(parsedList)) {
-        const found = parsedList.find(u => (u.email || '').toLowerCase().replace(/^@/, '') === cleanKey);
-        if (found?.avatarUrl && !found.avatarUrl.includes('ui-avatars.com')) {
-          return found.avatarUrl;
-        }
+      if (map[emailOrUsername] && !map[emailOrUsername].includes('ui-avatars.com')) {
+        return map[emailOrUsername];
       }
     }
   } catch {}
 
-  // Fallback default avatar generator
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || emailOrUsername || 'User')}&background=2563eb&color=fff&size=100`;
+  // 2. Return public Supabase Cloud Storage URL (Deterministic - Works on ALL devices globally!)
+  return getPublicStorageAvatarUrl(key);
 }
 
 export function saveAvatarForUser(emailOrUsername: string, avatarDataUrl: string): void {
   if (!avatarDataUrl) return;
   try {
-    const cleanKey = (emailOrUsername || '').toLowerCase().trim().replace(/^@/, '');
+    const key = sanitizeUserStorageKey(emailOrUsername);
     const raw = localStorage.getItem('EARSIP_AVATARS_MAP');
     const map = raw ? JSON.parse(raw) : {};
-    map[cleanKey] = avatarDataUrl;
-    if (cleanKey === 'superadmin' || cleanKey === 'master-superadmin') {
+    map[key] = avatarDataUrl;
+    map[emailOrUsername] = avatarDataUrl;
+    if (key === 'superadmin' || emailOrUsername.includes('superadmin')) {
       map['superadmin'] = avatarDataUrl;
       map['master-superadmin'] = avatarDataUrl;
     }
