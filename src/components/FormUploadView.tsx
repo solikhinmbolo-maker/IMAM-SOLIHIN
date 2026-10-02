@@ -300,7 +300,7 @@ export default function FormUploadView({
     };
 
     setProgressPercent(60);
-    setProgressStatus('Mengunggah ke Google Drive & mencatat ke Google Sheet...');
+    setProgressStatus('Menyimpan dokumen & menyinkronkan ke Cloud Database...');
 
     try {
       const res = await syncItemToGoogleCloud(updatedArsip, fileBase64);
@@ -322,7 +322,7 @@ export default function FormUploadView({
     }
 
     setProgressPercent(100);
-    setProgressStatus('Selesai disimpan di Google Drive & Google Spreadsheet!');
+    setProgressStatus('Selesai tersimpan di Firebase Cloud Database!');
 
     setStoredArsipList(getStoredArsip());
     setIsUploading(false);

@@ -147,6 +147,11 @@ export async function saveFileAttachment(id: string, dataUrl: string) {
   if (!dataUrl) return;
   fileBlobCache.set(id, dataUrl);
   try {
+    localStorage.setItem(`file_blob_${id}`, dataUrl);
+  } catch {
+    // ignore quota error
+  }
+  try {
     const db = await openIDB();
     if (!db) return;
     const tx = db.transaction(IDB_STORE, 'readwrite');
@@ -161,6 +166,14 @@ export async function getFileAttachment(id: string): Promise<string | null> {
   if (fileBlobCache.has(id)) {
     return fileBlobCache.get(id) || null;
   }
+  try {
+    const localBlob = localStorage.getItem(`file_blob_${id}`);
+    if (localBlob) {
+      fileBlobCache.set(id, localBlob);
+      return localBlob;
+    }
+  } catch {}
+
   try {
     const db = await openIDB();
     if (!db) return null;

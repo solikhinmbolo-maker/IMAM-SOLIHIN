@@ -295,7 +295,12 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
                   Berkas <strong>{item.namaFileAsli || item.kategori}</strong> diunggah langsung ke penyimpanan Google Drive Anda. Anda dapat melihat lembar verifikasi digital atau membuka file langsung di Drive.
                 </p>
                 <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
-                  {item.linkDrive && item.linkDrive.startsWith('http') && (
+                  {item.linkDrive && 
+                   item.linkDrive.startsWith('http') && 
+                   !item.linkDrive.includes('SSW-') && 
+                   !item.linkDrive.includes('GRU-') && 
+                   !item.linkDrive.includes('LYN-') && 
+                   !item.linkDrive.includes('ARS-') ? (
                     <a
                       href={item.linkDrive}
                       target="_blank"
@@ -305,7 +310,7 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
                       <span>Buka File di Drive</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
-                  )}
+                  ) : null}
                   <button
                     onClick={() => setActiveTab('certificate')}
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -318,7 +323,7 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
                     rel="noopener noreferrer"
                     className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
-                    <span>Folder Drive</span>
+                    <span>Buka Folder Drive</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
