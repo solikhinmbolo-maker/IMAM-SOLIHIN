@@ -294,22 +294,20 @@ export function saveArsipItem(item: ArsipItem): ArsipItem[] {
     saveFileAttachment(item.id, item.fileDataUrl);
   }
 
-  // 2. Prepare clean item for LocalStorage (NO giant base64 strings!)
+  // 2. Prepare clean item for LocalStorage
   const cleanItemForStorage: ArsipItem = { ...item };
-  delete cleanItemForStorage.fileDataUrl;
 
   const current = getStoredArsip();
   const currentClean = current.map(c => {
     const copy = { ...c };
-    delete copy.fileDataUrl;
     return copy;
   });
 
   const updatedClean = [cleanItemForStorage, ...currentClean];
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
 
-  // Sync to Firebase Cloud Firestore
-  saveArsipToFirestore(cleanItemForStorage).catch(() => {});
+  // Sync to Firebase Cloud Firestore (including fileDataUrl so all devices see the real uploaded file!)
+  saveArsipToFirestore(item).catch(() => {});
 
   // Return list with enriched item for immediate UI update
   return [item, ...current];
@@ -394,19 +392,16 @@ export function replaceArsipItem(existingId: string, newItem: ArsipItem): ArsipI
 
   const current = getStoredArsip();
   const cleanItemForStorage: ArsipItem = { ...newItem };
-  delete cleanItemForStorage.fileDataUrl;
 
   const updatedClean = current.map(item => {
     if (item.id === existingId) {
       return cleanItemForStorage;
     }
-    const copy = { ...item };
-    delete copy.fileDataUrl;
-    return copy;
+    return { ...item };
   });
 
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
-  saveArsipToFirestore(cleanItemForStorage).catch(() => {});
+  saveArsipToFirestore(newItem).catch(() => {});
 
   return current.map(item => item.id === existingId ? newItem : item);
 }

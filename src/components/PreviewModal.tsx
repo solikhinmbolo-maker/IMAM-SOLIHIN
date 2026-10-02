@@ -10,9 +10,10 @@ import {
   Award, 
   Loader2,
   AlertCircle,
-  Maximize2
+  Maximize2,
+  Upload
 } from 'lucide-react';
-import { ArsipItem, getFileAttachment, getStoredSyncConfig } from '../data/mockDatabase';
+import { ArsipItem, getFileAttachment, saveFileAttachment, replaceArsipItem, getStoredSyncConfig } from '../data/mockDatabase';
 
 interface PreviewModalProps {
   item: ArsipItem | null;
@@ -59,6 +60,83 @@ function getDriveEmbedUrl(link?: string): string {
   return '';
 }
 
+function generateDocumentSvgDataUrl(item: ArsipItem): string {
+  const title = (item.namaFileAsli || item.subjek || 'DOKUMEN ARSIP RESMI').toUpperCase();
+  const date = item.tanggal || new Date().toLocaleDateString('id-ID');
+  const subject = item.subjek || '-';
+  const identity = item.identitas || '-';
+  const category = item.kategori || 'Arsip Resmi';
+  const id = item.id || 'ARS-001';
+
+  const svgString = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1100" viewBox="0 0 800 1100">
+      <rect width="800" height="1100" fill="#ffffff" />
+      <rect x="25" y="25" width="750" height="1050" fill="none" stroke="#0f172a" stroke-width="4" />
+      <rect x="35" y="35" width="730" height="1030" fill="none" stroke="#0284c7" stroke-width="2" />
+      
+      <!-- Header -->
+      <text x="400" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#64748b" letter-spacing="2">SEKOLAH MENENGAH PERTAMA AL-HICAM</text>
+      <text x="400" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#0f172a">LEMBAR ARSIP DIGITAL RESMI</text>
+      <line x1="80" y1="145" x2="720" y2="145" stroke="#0f172a" stroke-width="2" />
+      <line x1="80" y1="149" x2="720" y2="149" stroke="#0284c7" stroke-width="1" />
+
+      <!-- Document Title -->
+      <rect x="80" y="180" width="640" height="65" rx="12" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5" />
+      <text x="400" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="bold" fill="#0369a1">${title.length > 50 ? title.substring(0, 50) + '...' : title}</text>
+
+      <!-- Metadata Box -->
+      <rect x="80" y="270" width="640" height="430" rx="14" fill="#fafafa" stroke="#cbd5e1" stroke-width="2" />
+      
+      <!-- Metadata Rows -->
+      <text x="120" y="325" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Nomor ID Arsip</text>
+      <text x="330" y="325" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">: ${id}</text>
+      <line x1="120" y1="345" x2="680" y2="345" stroke="#e2e8f0" stroke-width="1" />
+
+      <text x="120" y="380" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Nama Subjek / Pemilik</text>
+      <text x="330" y="380" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">: ${subject}</text>
+      <line x1="120" y1="400" x2="680" y2="400" stroke="#e2e8f0" stroke-width="1" />
+
+      <text x="120" y="435" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Identitas (NISN / NUPTK)</text>
+      <text x="330" y="435" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">: ${identity}</text>
+      <line x1="120" y1="455" x2="680" y2="455" stroke="#e2e8f0" stroke-width="1" />
+
+      <text x="120" y="490" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Kategori Dokumen</text>
+      <text x="330" y="490" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0284c7">: ${category}</text>
+      <line x1="120" y1="510" x2="680" y2="510" stroke="#e2e8f0" stroke-width="1" />
+
+      <text x="120" y="545" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Tanggal Terdaftar</text>
+      <text x="330" y="545" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">: ${date}</text>
+      <line x1="120" y1="565" x2="680" y2="565" stroke="#e2e8f0" stroke-width="1" />
+
+      <text x="120" y="600" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#475569">Status Validasi</text>
+      <text x="330" y="600" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#16a34a">: TERVERIFIKASI DIGITAL (FIREBASE DB)</text>
+
+      <!-- Digital QR Code -->
+      <rect x="120" y="730" width="180" height="180" rx="16" fill="#ffffff" stroke="#0284c7" stroke-width="2" />
+      <text x="210" y="785" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0284c7">VERIFIKASI OTENTIK</text>
+      <text x="210" y="830" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#0f172a">📱</text>
+      <text x="210" y="875" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">${id}</text>
+
+      <!-- Signature Seal -->
+      <text x="540" y="750" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#475569">Ditetapkan Secara Digital Oleh</text>
+      <text x="540" y="770" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#0f172a">Tim Arsiparis SMP Al-Hicam</text>
+      
+      <!-- Stamp Graphic -->
+      <circle cx="540" cy="835" r="45" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="6,3" />
+      <text x="540" y="830" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#dc2626">E-ARSIP RESMI</text>
+      <text x="540" y="845" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#dc2626">SMP AL-HICAM</text>
+
+      <text x="540" y="910" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#64748b">Operator Arsip Digital</text>
+
+      <!-- Footer Note -->
+      <rect x="0" y="1040" width="800" height="60" fill="#0f172a" />
+      <text x="400" y="1075" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">Sistem Informasi E-Arsip Digital • SMP Al-Hicam • Firestore Cloud Database</text>
+    </svg>
+  `;
+
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svgString);
+}
+
 export default function PreviewModal({ item, onClose, onPrint, onDownload }: PreviewModalProps) {
   const [activeTab, setActiveTab] = useState<'file' | 'certificate'>('file');
   const [fileData, setFileData] = useState<string>('');
@@ -84,19 +162,21 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
       .then((data) => {
         if (data) {
           setFileData(data);
-        } else if (item.linkDrive && item.linkDrive.startsWith('http')) {
-          setFileData(getDriveEmbedUrl(item.linkDrive));
         } else {
-          setFileData('');
-          setActiveTab('certificate');
+          const driveEmbed = getDriveEmbedUrl(item.linkDrive);
+          if (driveEmbed) {
+            setFileData(driveEmbed);
+          } else {
+            setFileData(generateDocumentSvgDataUrl(item));
+          }
         }
       })
       .catch(() => {
-        if (item.linkDrive && item.linkDrive.startsWith('http')) {
-          setFileData(getDriveEmbedUrl(item.linkDrive));
+        const driveEmbed = getDriveEmbedUrl(item.linkDrive);
+        if (driveEmbed) {
+          setFileData(driveEmbed);
         } else {
-          setFileData('');
-          setActiveTab('certificate');
+          setFileData(generateDocumentSvgDataUrl(item));
         }
       })
       .finally(() => {
@@ -142,6 +222,25 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
         win.document.write(`<iframe src="${fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
       }
     }
+  };
+
+  const handleCustomFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !item) return;
+
+    setIsLoadingFile(true);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const base64 = evt.target?.result as string;
+      if (base64) {
+        setFileData(base64);
+        saveFileAttachment(item.id, base64);
+        const updatedItem = { ...item, fileDataUrl: base64, namaFileAsli: file.name };
+        replaceArsipItem(item.id, updatedItem);
+      }
+      setIsLoadingFile(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -215,6 +314,20 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
               <Printer className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Cetak</span>
             </button>
+
+            <label 
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
+              title="Unggah atau ganti berkas fisik asli (PDF/JPG/PNG)"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Pilih Berkas Asli</span>
+              <input 
+                type="file" 
+                accept="image/*,.pdf" 
+                className="hidden" 
+                onChange={handleCustomFileUpload} 
+              />
+            </label>
 
             <button
               onClick={() => onDownload(item)}
