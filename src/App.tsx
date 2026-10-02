@@ -59,6 +59,12 @@ import {
   syncItemToGoogleCloud,
   fetchLiveFullDataFromGoogle
 } from './data/mockDatabase';
+import { 
+  subscribeToArsip, 
+  subscribeToMasterSiswa, 
+  subscribeToMasterGuru, 
+  testFirestoreConnection 
+} from './firebase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
 type SubKategori = 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -212,6 +218,63 @@ export default function App() {
   const [testConnStatus, setTestConnStatus] = useState<string>('');
   const [isTestingConn, setIsTestingConn] = useState(false);
   const [dbVersion, setDbVersion] = useState(0);
+
+  // Real-time Cloud Database Listeners (Multi-Device Auto Sync)
+  useEffect(() => {
+    testFirestoreConnection();
+
+    const unsubArsip = subscribeToArsip((remoteItems) => {
+      try {
+        const currentLocal = getStoredArsip();
+        // Bidirectional merge (Union of local and remote items by ID) so no document ever disappears
+        const mergedMap = new Map<string, ArsipItem>();
+        currentLocal.forEach(it => mergedMap.set(it.id, it));
+        if (Array.isArray(remoteItems)) {
+          remoteItems.forEach(it => {
+            const existing = mergedMap.get(it.id);
+            mergedMap.set(it.id, {
+              ...it,
+              fileDataUrl: it.fileDataUrl || existing?.fileDataUrl
+            });
+          });
+        }
+        const finalMerged = Array.from(mergedMap.values()).sort((a, b) => {
+          return new Date(b.tanggal || 0).getTime() - new Date(a.tanggal || 0).getTime();
+        });
+        const clean = finalMerged.map(it => {
+          const copy = { ...it };
+          delete copy.fileDataUrl;
+          return copy;
+        });
+        localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(clean));
+        setDbVersion(v => v + 1);
+      } catch {}
+    });
+
+    const unsubSiswa = subscribeToMasterSiswa((siswaList) => {
+      if (Array.isArray(siswaList) && siswaList.length > 0) {
+        try {
+          localStorage.setItem(DB_KEYS.MASTER_SISWA, JSON.stringify(siswaList));
+          setDbVersion(v => v + 1);
+        } catch {}
+      }
+    });
+
+    const unsubGuru = subscribeToMasterGuru((guruList) => {
+      if (Array.isArray(guruList) && guruList.length > 0) {
+        try {
+          localStorage.setItem(DB_KEYS.MASTER_GURU, JSON.stringify(guruList));
+          setDbVersion(v => v + 1);
+        } catch {}
+      }
+    });
+
+    return () => {
+      unsubArsip();
+      unsubSiswa();
+      unsubGuru();
+    };
+  }, []);
 
   const handleCopyGAS = () => {
     const code = `// ================================================================

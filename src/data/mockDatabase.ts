@@ -1,3 +1,10 @@
+import { 
+  saveArsipToFirestore, 
+  deleteArsipFromFirestore, 
+  saveSiswaToFirestore, 
+  saveGuruToFirestore 
+} from '../firebase';
+
 export interface MasterSiswaItem {
   id: string;
   nama: string;
@@ -301,6 +308,9 @@ export function saveArsipItem(item: ArsipItem): ArsipItem[] {
   const updatedClean = [cleanItemForStorage, ...currentClean];
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
 
+  // Sync to Firebase Cloud Firestore
+  saveArsipToFirestore(cleanItemForStorage).catch(() => {});
+
   // Return list with enriched item for immediate UI update
   return [item, ...current];
 }
@@ -396,7 +406,22 @@ export function replaceArsipItem(existingId: string, newItem: ArsipItem): ArsipI
   });
 
   safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
+  saveArsipToFirestore(cleanItemForStorage).catch(() => {});
+
   return current.map(item => item.id === existingId ? newItem : item);
+}
+
+export function deleteArsipItem(id: string): ArsipItem[] {
+  const current = getStoredArsip();
+  const updatedClean = current.filter(item => item.id !== id).map(c => {
+    const copy = { ...c };
+    delete copy.fileDataUrl;
+    return copy;
+  });
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
+  fileBlobCache.delete(id);
+  deleteArsipFromFirestore(id).catch(() => {});
+  return current.filter(item => item.id !== id);
 }
 
 // =====================================================================
@@ -414,6 +439,15 @@ export function saveMasterSiswa(item: MasterSiswaItem): MasterSiswaItem[] {
     updated = [item, ...current];
   }
   safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(updated));
+  saveSiswaToFirestore({
+    id: item.id,
+    nisn: item.nisn,
+    nama: item.nama,
+    tahun: item.tahun,
+    kelas: item.kelas,
+    tanggalTerdaftar: new Date().toLocaleDateString('id-ID')
+  }).catch(() => {});
+
   addAuditLog({
     aksi: 'UPDATE',
     kategori: 'Buku Induk Siswa',
@@ -454,6 +488,14 @@ export function saveMasterGuru(item: MasterGuruItem): MasterGuruItem[] {
     updated = [item, ...current];
   }
   safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(updated));
+  saveGuruToFirestore({
+    id: item.id,
+    nuptk: item.nuptk,
+    nama: item.nama,
+    jabatan: item.jabatan,
+    tanggalTerdaftar: new Date().toLocaleDateString('id-ID')
+  }).catch(() => {});
+
   addAuditLog({
     aksi: 'UPDATE',
     kategori: 'Direktori Pendidik',
