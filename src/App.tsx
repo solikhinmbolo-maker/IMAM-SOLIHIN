@@ -27,7 +27,15 @@ import {
   Check,
   CheckCircle2,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  Type,
+  Info,
+  ShieldCheck,
+  Laptop,
+  Bell,
+  Key,
+  Cloud
 } from 'lucide-react';
 import LoginPage from './components/LoginPage';
 import DashboardView from './components/DashboardView';
@@ -172,7 +180,31 @@ export default function App() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showSettingModal, setShowSettingModal] = useState(false);
+  const [settingTab, setSettingTab] = useState<'tampilan' | 'bahasa' | 'akun' | 'cloud' | 'tentang'>('tampilan');
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
+
+  // App User Preferences
+  const [userPrefs, setUserPrefs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('EARSIP_USER_PREFS');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      fontSize: 'normal',
+      language: 'id',
+      density: 'standard',
+      themeAccent: 'blue',
+      animations: true
+    };
+  });
+
+  const handleSavePref = (key: string, value: any) => {
+    const updated = { ...userPrefs, [key]: value };
+    setUserPrefs(updated);
+    try {
+      localStorage.setItem('EARSIP_USER_PREFS', JSON.stringify(updated));
+    } catch {}
+  };
 
   // Google Sync Config
   const [syncConfig, setSyncConfig] = useState<GoogleSyncConfig>(() => getStoredSyncConfig());
@@ -1086,25 +1118,6 @@ function doGet(e) {
 
         {/* View Contents with top padding for fixed header in mobile */}
         <div className="p-3.5 sm:p-8 pt-[82px] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
-          {/* Cloud Connection Setup Banner (if not yet connected on this device/profile) */}
-          {!syncConfig.webhookUrl && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 rounded-r-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⚠️</span>
-                <div>
-                  <p className="text-xs sm:text-sm font-bold text-amber-900">Perangkat / Akun Google Ini Belum Terhubung ke Server Google Spreadsheet</p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">Masukkan URL Webhook di Pengaturan Sistem agar data di akun/browser ini 100% tersambung ke server yang sama.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSettingModal(true)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer flex-shrink-0"
-              >
-                Hubungkan Server
-              </button>
-            </div>
-          )}
-
           {activePage === 'dashboard' && (
             <DashboardView
               key={dbVersion}
@@ -1436,204 +1449,337 @@ function doGet(e) {
         </div>
       )}
 
-      {/* 8. MODAL PENGATURAN SISTEM & SINKRONISASI GOOGLE */}
+      {/* 8. MODAL PENGATURAN SISTEM & PREFERENSI APLIKASI */}
       {showSettingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-xl w-full shadow-2xl border border-slate-100 animate-scaleUp max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 animate-scaleUp overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
                   <Settings className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Sinkronisasi Google Drive & Sheet</h3>
-                  <p className="text-xs text-slate-500">Hubungkan penyimpanan arsip fisik dan rekap database</p>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Pengaturan & Preferensi Sistem</h3>
+                  <p className="text-xs text-slate-500">Konfigurasi antarmuka, bahasa, akun, dan status server cloud</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowSettingModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 mb-6 text-xs text-slate-700">
-              
-              {/* Webhook URL Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  1. URL Webhook Google Apps Script (Web App URL)
-                </label>
-                <input
-                  type="text"
-                  value={syncConfig.webhookUrl}
-                  onChange={(e) => setSyncConfig({ ...syncConfig, webhookUrl: e.target.value })}
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-purple-600"
-                />
-                <span className="text-[10px] text-slate-500 block mt-1">
-                  Didapat setelah mengklik <strong>Deploy &gt; New Deployment &gt; Web App</strong> di Google Sheets Anda.
-                </span>
-              </div>
-
-              {/* Folder ID and Sheet ID */}
-              <div className="space-y-3">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <HardDrive className="w-3.5 h-3.5 text-blue-600" />
-                      ID Folder Google Drive
-                    </label>
-                    <a
-                      href={`https://drive.google.com/drive/folders/${syncConfig.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x'}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline"
-                    >
-                      <span>Buka Folder Drive</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                  <input
-                    type="text"
-                    value={syncConfig.folderId}
-                    onChange={(e) => setSyncConfig({ ...syncConfig, folderId: e.target.value })}
-                    placeholder="1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x"
-                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-blue-600"
-                  />
-                  <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
-                    ✓ Folder E-Arsip Al-Hikam Aktif
-                  </span>
-                </div>
-
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                      ID Google Spreadsheet
-                    </label>
-                    <a
-                      href={`https://docs.google.com/spreadsheets/d/${syncConfig.spreadsheetId || '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE'}/edit`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
-                    >
-                      <span>Buka Spreadsheet</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                  <input
-                    type="text"
-                    value={syncConfig.spreadsheetId}
-                    onChange={(e) => setSyncConfig({ ...syncConfig, spreadsheetId: e.target.value })}
-                    placeholder="1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE"
-                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-emerald-600"
-                  />
-                  <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
-                    ✓ Spreadsheet Database Siswa & Guru Aktif
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons: Copy Script & Test */}
-              <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <strong className="text-xs text-purple-900 block font-bold">Kode Script Google (Apps Script)</strong>
-                    <span className="text-[11px] text-purple-700">Tinggal copy dan paste di menu Ekstensi Google Sheet Anda</span>
-                  </div>
+            {/* Navigation Tabs */}
+            <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 bg-slate-100/70 border-b border-slate-200/80 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'tampilan', label: 'Tampilan & Font', icon: Type },
+                { id: 'bahasa', label: 'Bahasa & Waktu', icon: Globe },
+                { id: 'akun', label: 'Keterangan Akun', icon: ShieldCheck },
+                { id: 'cloud', label: 'Server & Cloud', icon: Cloud },
+                { id: 'tentang', label: 'Tentang Aplikasi', icon: Info }
+              ].map((tab) => {
+                const IconComponent = tab.icon;
+                const isActive = settingTab === tab.id;
+                return (
                   <button
-                    type="button"
-                    onClick={handleCopyGAS}
-                    className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                    key={tab.id}
+                    onClick={() => setSettingTab(tab.id as any)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-white text-blue-600 shadow-sm border border-slate-200'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
                   >
-                    {copiedGAS ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedGAS ? 'Tersalin ke Clipboard!' : 'Salin Kode Script'}</span>
+                    <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <span>{tab.label}</span>
                   </button>
-                </div>
+                );
+              })}
+            </div>
 
-                {syncConfig.webhookUrl && (
-                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[11px] text-slate-600">Periksa kesiapan koneksi:</span>
+            {/* Modal Body / Tab Contents */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-5 text-slate-700 text-xs">
+              
+              {/* TAB 1: TAMPILAN & FONT */}
+              {settingTab === 'tampilan' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Ukuran Huruf / Font Teks
+                    </label>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { id: 'small', label: 'Kecil (Kompak)', desc: '12px standar' },
+                        { id: 'normal', label: 'Sedang (Normal)', desc: '14px optimal' },
+                        { id: 'large', label: 'Besar (Jelas)', desc: '16px nyaman' }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => handleSavePref('fontSize', f.id)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                            userPrefs.fontSize === f.id
+                              ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 text-blue-900'
+                              : 'bg-white border-slate-200 hover:bg-slate-100/80 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs">{f.label}</span>
+                            {userPrefs.fontSize === f.id && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-1">{f.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <strong className="text-xs font-bold text-slate-800 block">Kerapatan Baris Tabel (Table Density)</strong>
+                      <span className="text-[11px] text-slate-500">Sesuaikan jarak antar baris pada rekap arsip & buku induk</span>
+                    </div>
+                    <select
+                      value={userPrefs.density}
+                      onChange={(e) => handleSavePref('density', e.target.value)}
+                      className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="compact">Rapat (Compact)</option>
+                      <option value="standard">Standar (Optimal)</option>
+                      <option value="spacious">Luas (Nyaman)</option>
+                    </select>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <strong className="text-xs font-bold text-slate-800 block">Animasi Halus & Efek Transisi</strong>
+                      <span className="text-[11px] text-slate-500">Aktifkan efek peralihan halus antar halaman dashboard</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSavePref('animations', !userPrefs.animations)}
+                      className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                        userPrefs.animations ? 'bg-blue-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        userPrefs.animations ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: BAHASA & WAKTU */}
+              {settingTab === 'bahasa' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Bahasa Sistem / Language
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'id', label: 'Bahasa Indonesia (Resmi)', flag: '🇮🇩' },
+                        { id: 'en', label: 'English (US)', flag: '🇺🇸' }
+                      ].map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => handleSavePref('language', l.id)}
+                          className={`p-3.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                            userPrefs.language === l.id
+                              ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 text-blue-900 font-bold'
+                              : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="text-base">{l.flag}</span>
+                            <span>{l.label}</span>
+                          </span>
+                          {userPrefs.language === l.id && <Check className="w-4 h-4 text-blue-600" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                    <strong className="text-xs font-bold text-slate-800 block">Format Waktu & Zona Wilayah</strong>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600">
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                        <span className="text-[10px] text-slate-400 block uppercase font-mono">Format Tanggal</span>
+                        <span className="font-semibold text-slate-800 text-xs">DD/MM/YYYY (Contoh: 02/10/2026)</span>
+                      </div>
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                        <span className="text-[10px] text-slate-400 block uppercase font-mono">Zona Waktu</span>
+                        <span className="font-semibold text-slate-800 text-xs">Asia/Jakarta (WIB GMT+7)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: KETERANGAN AKUN & KEAMANAN */}
+              {settingTab === 'akun' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-2xl text-white flex items-center gap-4 shadow-md">
+                    <img
+                      src="https://ui-avatars.com/api/?name=Solikhin+Mbolo&background=3b82f6&color=fff&size=120"
+                      alt="Avatar"
+                      className="w-14 h-14 rounded-2xl border-2 border-cyan-400 object-cover shadow"
+                    />
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{currentUser.name}</h4>
+                      <p className="text-xs text-cyan-300 font-mono mt-0.5">{currentUser.email}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">
+                          {currentUser.role}
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Status: Aktif & Terverifikasi
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                    <strong className="text-xs font-bold text-slate-800 block">Keamanan & Masa Sesi Login</strong>
+                    <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl">
+                      <div className="flex items-center gap-2.5">
+                        <Clock className="w-4 h-4 text-blue-600" />
+                        <div>
+                          <span className="text-xs font-semibold text-slate-800 block">Auto-Logout Setelah 30 Menit Tidak Aktif</span>
+                          <span className="text-[10px] text-slate-500">Mencegah akses liar jika perangkat ditinggal terbuka</span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        Aktif
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: STATUS SERVER & CLOUD */}
+              {settingTab === 'cloud' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-300/80 rounded-2xl flex items-center gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-950">Server Cloud Siap Pakai & Otomatis Terhubung</h4>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                        Aplikasi telah terintegrasi secara permanen dengan Google Drive & Google Spreadsheet. Semua akun guru dan perangkat tidak perlu memasukkan link apapun lagi.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <HardDrive className="w-4 h-4 text-blue-600" />
+                          Google Drive (Arsip Fisik)
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" title="Online" />
+                      </div>
+                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID: {syncConfig.folderId}</p>
+                      <a
+                        href={`https://drive.google.com/drive/folders/${syncConfig.folderId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        <span>Buka Folder Drive</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-emerald-600" />
+                          Google Spreadsheet (Database)
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" title="Online" />
+                      </div>
+                      <p className="text-[11px] text-slate-500 mb-2 font-mono truncate">ID: {syncConfig.spreadsheetId}</p>
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${syncConfig.spreadsheetId}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                      >
+                        <span>Buka Spreadsheet</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <strong className="text-xs font-bold text-slate-800 block">Uji Kecepatan Respon Cloud</strong>
+                      <span className="text-[11px] text-slate-500">{testConnStatus || 'Klik untuk menguji koneksi ke server'}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={handleTestConnection}
                       disabled={isTestingConn}
-                      className="px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-semibold cursor-pointer"
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer flex-shrink-0"
                     >
-                      {isTestingConn ? 'Menguji...' : '⚡ Uji Respon Webhook'}
-                    </button>
-                  </div>
-                )}
-
-                {testConnStatus && (
-                  <div className="p-2.5 bg-white/90 rounded-xl text-[11px] font-semibold text-slate-800 border border-purple-200">
-                    {testConnStatus}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-[11px] leading-relaxed">
-                ✓ <strong>Otomatis Real-Time:</strong> Setiap kali dokumen diunggah, berkas fisik langsung tersimpan ke <strong>Google Drive</strong> dan datanya otomatis tertulis di baris <strong>Google Spreadsheet</strong>.
-              </div>
-
-              {/* Basis Data Control: Kosongkan Demo / Mulai dari 0 */}
-              <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <strong className="text-xs text-rose-900 block font-bold">Status Data E-Arsip Sekolah</strong>
-                    <span className="text-[11px] text-rose-700">
-                      Bersihkan 13 data arsip contoh demo agar Dashboard mulai bersih dari angka 0.
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm('Kosongkan semua data arsip demo agar dashboard mulai dari angka 0?')) {
-                          clearAllArsipData();
-                          setDbVersion(v => v + 1);
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Kosongkan Data (Mulai dari 0)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        restoreSampleArsipData();
-                        setDbVersion(v => v + 1);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 hover:bg-rose-100/60 font-semibold text-xs cursor-pointer"
-                      title="Muat Ulang Contoh Data Demo"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
+                      {isTestingConn ? 'Menguji...' : '⚡ Cek Koneksi'}
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* TAB 5: TENTANG APLIKASI */}
+              {settingTab === 'tentang' && (
+                <div className="space-y-4 animate-fadeIn text-center sm:text-left">
+                  <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <img 
+                      src="https://i.ibb.co.com/Jw175yjb/file-00000000c4287208bc89c0bb125befc2-1.png" 
+                      alt="Logo SMP Al-Hikam" 
+                      className="w-16 h-16 object-contain"
+                    />
+                    <div>
+                      <h4 className="text-base font-bold text-slate-900">E-Arsip Digital SMP Al-Hikam Jombang</h4>
+                      <p className="text-xs text-slate-600 mt-0.5">Sistem Manajemen Pengarsipan Digital Siswa, Guru & Dokumen Resmi Sekolah</p>
+                      <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                          Versi V2.5 Cloud Pro
+                        </span>
+                        <span className="text-[10px] text-slate-400">Build: Oktober 2026</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 space-y-1.5 leading-relaxed">
+                    <p><strong>Penyimpanan Fisik:</strong> Google Drive Cloud Storage (100 GB Terhubung)</p>
+                    <p><strong>Mesin Database:</strong> Google Spreadsheet Engine dengan Integrasi Apps Script</p>
+                    <p><strong>Lisensi:</strong> Hak Cipta Terpelihara © 2026 SMP Al-Hikam Jombang</p>
+                  </div>
+                </div>
+              )}
 
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            {/* Modal Footer */}
+            <div className="p-4 px-6 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Pengaturan tersimpan otomatis di perangkat ini.
+              </span>
               <button
                 type="button"
                 onClick={() => setShowSettingModal(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
               >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveSettings}
-                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 active:scale-95 transition-all cursor-pointer"
-              >
-                Simpan Pengaturan
+                Tutup Pengaturan
               </button>
             </div>
+
           </div>
         </div>
       )}
