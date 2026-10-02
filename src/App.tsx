@@ -1057,8 +1057,8 @@ function doGet(e) {
 
       {/* 2. SIDEBAR NAVIGATION (DESKTOP & ACCESSIBLE AS DRAWER) */}
       <aside className={`
-        fixed top-0 bottom-0 left-0 z-[100] w-72 max-w-[82vw] bg-[#0F172A] text-slate-200 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.95)] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
-        ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        fixed top-0 bottom-0 left-0 z-[100] w-72 lg:w-64 max-w-[82vw] bg-[#0F172A] text-slate-200 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+        ${mobileSidebarOpen ? 'translate-x-0 shadow-[0_0_60px_rgba(0,0,0,0.95)]' : '-translate-x-full lg:translate-x-0 lg:shadow-none'}
       `}>
         {/* Sidebar Header with Logo */}
         <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
