@@ -119,6 +119,12 @@ export default function UserManagementModal({
   const [isSyncing, setIsSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const isCurrentSuperAdmin = Boolean(
+    currentUser.role === 'Super Administrator' || 
+    currentUser.email.toLowerCase() === 'superadmin' ||
+    (currentUser as any).isSuperAdmin
+  );
+
   // Refresh and auto-sync user list every time modal is opened
   useEffect(() => {
     if (isOpen) {
@@ -167,6 +173,14 @@ export default function UserManagementModal({
   if (!isOpen) return null;
 
   const handleStartEdit = (user: SystemUser) => {
+    const isSelf = user.email.toLowerCase().replace(/^@/, '') === currentUser.email.toLowerCase().replace(/^@/, '') ||
+      (currentUser.email.toLowerCase() === 'superadmin' && (user.id === 'master-superadmin' || user.email.toLowerCase() === 'superadmin'));
+
+    if (!isCurrentSuperAdmin && !isSelf) {
+      setMessage({ type: 'error', text: '🔒 Akses Ditolak: Anda hanya berhak mengedit profil akun Anda sendiri.' });
+      return;
+    }
+
     setEditingUser(user);
     setIsCreatingNew(false);
     setFormName(user.name);
@@ -179,6 +193,11 @@ export default function UserManagementModal({
   };
 
   const handleStartCreate = () => {
+    if (!isCurrentSuperAdmin) {
+      setMessage({ type: 'error', text: '🔒 Akses Ditolak: Hanya Super Administrator yang berhak menambah akun pengguna baru.' });
+      return;
+    }
+
     setEditingUser(null);
     setIsCreatingNew(true);
     setFormName('');
@@ -593,10 +612,11 @@ export default function UserManagementModal({
                 <input
                   type="text"
                   required
+                  disabled={!isCurrentSuperAdmin && !isCreatingNew}
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
                   placeholder="User Name"
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60 disabled:bg-slate-950"
                 />
               </div>
 
@@ -609,9 +629,9 @@ export default function UserManagementModal({
                   </label>
                   <select
                     value={formRole}
-                    disabled={editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
+                    disabled={!isCurrentSuperAdmin || editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
                     onChange={(e) => setFormRole(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60 disabled:bg-slate-950"
                   >
                     <option value="Super Administrator">Super Administrator (Akses Penuh)</option>
                     <option value="Administrator Arsip">Administrator Arsip</option>
@@ -627,15 +647,22 @@ export default function UserManagementModal({
                   </label>
                   <select
                     value={formStatus}
-                    disabled={editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
+                    disabled={!isCurrentSuperAdmin || editingUser?.id === 'master-superadmin' || editingUser?.email === 'superadmin'}
                     onChange={(e) => setFormStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer font-medium disabled:opacity-60 disabled:bg-slate-950"
                   >
                     <option value="Aktif">Aktif (Bisa Login)</option>
                     <option value="Nonaktif">Nonaktif (Ditangguhkan)</option>
                   </select>
                 </div>
               </div>
+
+              {!isCurrentSuperAdmin && (
+                <p className="text-[10px] text-amber-400/90 flex items-center gap-1 mt-1 font-medium">
+                  <Lock className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                  <span>Peran & Status Akun hanya dapat diubah oleh Super Administrator.</span>
+                </p>
+              )}
 
               {/* Password */}
               <div>
@@ -694,32 +721,43 @@ export default function UserManagementModal({
                 <span className="text-xs font-semibold text-slate-400">
                   Total {users.length} Akun Terdaftar
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleManualSyncSupabase}
-                    disabled={isSyncing}
-                    className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                    title="Kirim & Sinkronkan semua akun ke tabel users di Supabase"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isSyncing ? 'Menyinkronkan...' : '⚡ Sinkronkan Supabase'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStartCreate}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Tambah Pengguna</span>
-                  </button>
-                </div>
+                {isCurrentSuperAdmin ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleManualSyncSupabase}
+                      disabled={isSyncing}
+                      className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                      title="Kirim & Sinkronkan semua akun ke tabel users di Supabase"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Menyinkronkan...' : '⚡ Sinkronkan Supabase'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartCreate}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Tambah Pengguna</span>
+                    </button>
+                  </div>
+                ) : (
+                  <span className="px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-xl text-[11px] font-semibold flex items-center gap-1.5">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Akses Mandiri (Edit Profil Anda)</span>
+                  </span>
+                )}
               </div>
 
               {/* Users Cards */}
               {users.map((u) => {
-                // Tentukan hanya 1 akun yang merupakan Anda (Master Super Administrator)
-                const isAnda = u.id === 'master-superadmin' || u.email.toLowerCase() === 'superadmin' || u.email.toLowerCase() === currentUser.email.toLowerCase();
+                const isAnda = u.id === 'master-superadmin' || 
+                  u.email.toLowerCase().replace(/^@/, '') === currentUser.email.toLowerCase().replace(/^@/, '') ||
+                  (currentUser.email.toLowerCase() === 'superadmin' && u.email.toLowerCase() === 'superadmin');
+
+                const canEdit = isCurrentSuperAdmin || isAnda;
+                const canDelete = isCurrentSuperAdmin && u.id !== 'master-superadmin' && u.email.toLowerCase() !== 'superadmin';
 
                 return (
                   <div 
@@ -766,16 +804,22 @@ export default function UserManagementModal({
 
                       {/* Action Buttons: Edit & Delete */}
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(u)}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm group"
-                          title={`Edit Akun ${u.name}`}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(u)}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm group"
+                            title={isAnda ? "Edit Profil Saya" : `Edit Akun ${u.name}`}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="p-2 rounded-xl bg-slate-800/40 text-slate-600 border border-slate-800/80 cursor-not-allowed" title="Hanya Super Administrator yang berhak mengedit akun pengguna lain">
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        )}
 
-                        {u.id !== 'master-superadmin' && u.email !== 'superadmin' && (
+                        {canDelete && (
                           <button
                             type="button"
                             onClick={() => handleDeleteUser(u)}
