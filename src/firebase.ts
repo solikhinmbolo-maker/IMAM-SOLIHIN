@@ -58,7 +58,13 @@ if (isFirestoreQuotaExceeded) {
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const message = error instanceof Error ? error.message : String(error);
   
-  if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted') || message.includes('RESOURCE_EXHAUSTED')) {
+  if (
+    message.includes('Quota') || 
+    message.includes('quota') || 
+    message.includes('resource-exhausted') || 
+    message.includes('RESOURCE_EXHAUSTED') || 
+    message.includes('Quota limit exceeded')
+  ) {
     isFirestoreQuotaExceeded = true;
     try {
       sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
@@ -66,7 +72,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       disableNetwork(db).catch(() => {});
     } catch {}
 
-    console.warn('[Firestore] Quota limit reached for free tier. Disabled Firestore network and falling back cleanly to Supabase & local storage cache.');
     return {
       error: 'Quota limit exceeded',
       operationType,
@@ -91,7 +96,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.warn('Firestore Error Notice: ', message);
   return errInfo;
 }
 

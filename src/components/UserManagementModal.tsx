@@ -16,7 +16,9 @@ import {
   AlertCircle,
   ArrowLeft,
   Save,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  Check
 } from 'lucide-react';
 import { addAuditLog, DB_KEYS } from '../data/mockDatabase';
 import { syncAllUsersToSupabase, saveSingleUserToSupabase, deleteUserFromSupabase, fetchUsersFromSupabase } from '../supabase';
@@ -107,6 +109,7 @@ export default function UserManagementModal({
   const [showPassword, setShowPassword] = useState(false);
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copiedRls, setCopiedRls] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -443,17 +446,42 @@ export default function UserManagementModal({
 
         {/* Alert Notification */}
         {message && (
-          <div className={`p-3 mb-3 rounded-2xl text-xs font-medium flex items-center gap-2.5 animate-fadeIn relative z-10 ${
+          <div className={`p-3.5 mb-3 rounded-2xl text-xs font-medium space-y-2 animate-fadeIn relative z-10 ${
             message.type === 'success' 
               ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300' 
               : 'bg-rose-950/80 border border-rose-500/50 text-rose-300'
           }`}>
-            {message.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+            <div className="flex items-start gap-2.5">
+              {message.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400 mt-0.5" />
+              )}
+              <div className="flex-1 leading-relaxed">
+                <span>{message.text}</span>
+              </div>
+            </div>
+
+            {/* Special 1-Click Fix Button for Supabase RLS (Row Level Security) Error */}
+            {message.type === 'error' && (message.text.includes('row-level security') || message.text.includes('RLS')) && (
+              <div className="pt-2 border-t border-rose-800/60 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-rose-200">
+                  ⚡ <strong>Solusi 1 Detik:</strong> Salin perintah SQL ini lalu jalankan di menu <strong>SQL Editor</strong> di Supabase Anda:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText('ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Public Full Access Users" ON public.users;\nCREATE POLICY "Public Full Access Users" ON public.users FOR ALL USING (true) WITH CHECK (true);');
+                    setCopiedRls(true);
+                    setTimeout(() => setCopiedRls(false), 4000);
+                  }}
+                  className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  {copiedRls ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedRls ? '✓ SQL Perbaikan RLS Tersalin!' : '📋 Salin SQL Buka Izin RLS'}</span>
+                </button>
+              </div>
             )}
-            <span>{message.text}</span>
           </div>
         )}
 
