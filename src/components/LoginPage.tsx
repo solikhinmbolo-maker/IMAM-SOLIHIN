@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2, KeyRound, Clock } from 'lucide-react';
 import { getStoredUserList, saveStoredUserList } from './UserManagementModal';
-import { fetchUsersFromSupabase } from '../supabase';
+import { fetchUsersFromSupabase, authenticateFromSupabaseDirect } from '../supabase';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { email: string; name: string; role: string; avatarUrl?: string }) => void;
@@ -59,7 +59,15 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
 
     setLoading(true);
 
-    // 1. Ambil akun dari local dan coba tarik versi terbaru dari Supabase
+    // 1. Cek langsung ke database Supabase Cloud
+    const directResult = await authenticateFromSupabaseDirect(email, password);
+    if (directResult.success && directResult.user) {
+      setLoading(false);
+      onLoginSuccess(directResult.user);
+      return;
+    }
+
+    // 2. Ambil akun dari local dan coba tarik versi terbaru dari Supabase
     let userList = getStoredUserList();
     try {
       const cloudUsers = await fetchUsersFromSupabase();
@@ -126,7 +134,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
       }
     }
 
-    setErrorMessage('Username tidak terdaftar! Hanya akun resmi yang diizinkan masuk.');
+    setErrorMessage(directResult.message || 'Username tidak terdaftar di database Supabase!');
   };
 
   const handleKirimReset = (e: React.FormEvent) => {

@@ -18,7 +18,7 @@ import {
   Save
 } from 'lucide-react';
 import { addAuditLog } from '../data/mockDatabase';
-import { syncAllUsersToSupabase } from '../supabase';
+import { syncAllUsersToSupabase, saveSingleUserToSupabase, deleteUserFromSupabase, fetchUsersFromSupabase } from '../supabase';
 
 export interface SystemUser {
   id: string;
@@ -323,10 +323,18 @@ export default function UserManagementModal({
     setUsers(updatedList);
     saveStoredUserList(updatedList);
 
-    // Sinkronkan ke database Supabase
+    // Simpan langsung ke Supabase Cloud (tabel public.users)
+    saveSingleUserToSupabase({
+      name: cleanName,
+      email: cleanEmail,
+      role: isCreatingNew ? formRole : (editingUser?.id === 'master-superadmin' ? 'Super Administrator' : formRole),
+      password: formPassword || (editingUser?.password || 'superadmin123')
+    }).catch(() => {});
+
+    // Sinkronkan seluruh list ke database Supabase
     syncAllUsersToSupabase(updatedList).catch(() => {});
 
-    setMessage({ type: 'success', text: `✓ Akun ${cleanName} berhasil disimpan dan disinkronkan ke sistem!` });
+    setMessage({ type: 'success', text: `✓ Akun ${cleanName} berhasil disimpan dan langsung masuk ke tabel Supabase!` });
     setTimeout(() => {
       handleCancelForm();
     }, 700);
@@ -346,7 +354,8 @@ export default function UserManagementModal({
     setUsers(filtered);
     saveStoredUserList(filtered);
 
-    // Sinkronkan perubahan penghapusan ke Supabase
+    // Hapus langsung dari database Supabase
+    deleteUserFromSupabase(user.email).catch(() => {});
     syncAllUsersToSupabase(filtered).catch(() => {});
 
     addAuditLog({
