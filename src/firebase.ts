@@ -43,11 +43,14 @@ export interface FirestoreErrorInfo {
   };
 }
 
+let isFirestoreQuotaExceeded = false;
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const message = error instanceof Error ? error.message : String(error);
   
   if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted') || message.includes('RESOURCE_EXHAUSTED')) {
-    console.warn('[Firestore] Quota limit reached for free tier. Falling back to Supabase & local storage cache.');
+    isFirestoreQuotaExceeded = true;
+    console.warn('[Firestore] Quota limit reached for free tier. Falling back cleanly to Supabase & local storage cache.');
     return {
       error: 'Quota limit exceeded',
       operationType,
@@ -148,6 +151,7 @@ export function subscribeToMasterGuru(onUpdate: (items: MasterGuru[]) => void) {
 
 // Save Arsip to Firestore
 export async function saveArsipToFirestore(item: ArsipItem): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
   try {
     const docRef = doc(db, 'arsip', item.id);
     
@@ -174,7 +178,6 @@ export async function saveArsipToFirestore(item: ArsipItem): Promise<boolean> {
     await setDoc(docRef, cleanData, { merge: true });
     return true;
   } catch (err) {
-    console.error('saveArsipToFirestore Error:', err);
     handleFirestoreError(err, OperationType.WRITE, `arsip/${item.id}`);
     return false;
   }
@@ -182,6 +185,7 @@ export async function saveArsipToFirestore(item: ArsipItem): Promise<boolean> {
 
 // Delete Arsip from Firestore
 export async function deleteArsipFromFirestore(id: string): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
   try {
     const docRef = doc(db, 'arsip', id);
     await deleteDoc(docRef);
@@ -194,12 +198,12 @@ export async function deleteArsipFromFirestore(id: string): Promise<boolean> {
 
 // Save Master Siswa to Firestore
 export async function saveSiswaToFirestore(siswa: MasterSiswa): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
   try {
     const docRef = doc(db, 'master_siswa', siswa.id || siswa.nisn);
     await setDoc(docRef, siswa, { merge: true });
     return true;
   } catch (err) {
-    console.warn('saveSiswaToFirestore quota/write notice:', err);
     handleFirestoreError(err, OperationType.WRITE, `master_siswa/${siswa.id || siswa.nisn}`);
     return false;
   }
@@ -207,12 +211,12 @@ export async function saveSiswaToFirestore(siswa: MasterSiswa): Promise<boolean>
 
 // Save Master Guru to Firestore
 export async function saveGuruToFirestore(guru: MasterGuru): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
   try {
     const docRef = doc(db, 'master_guru', guru.id || guru.nuptk);
     await setDoc(docRef, guru, { merge: true });
     return true;
   } catch (err) {
-    console.warn('saveGuruToFirestore quota/write notice:', err);
     handleFirestoreError(err, OperationType.WRITE, `master_guru/${guru.id || guru.nuptk}`);
     return false;
   }
