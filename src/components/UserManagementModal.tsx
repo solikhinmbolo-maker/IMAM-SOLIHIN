@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   Users, 
@@ -115,6 +115,25 @@ export default function UserManagementModal({
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      const list = getStoredUserList();
+      const updated = list.map(u => {
+        if (u.isSuperAdmin || u.email.toLowerCase() === currentUser.email.toLowerCase()) {
+          return {
+            ...u,
+            name: currentUser.name,
+            email: currentUser.email,
+            role: currentUser.role,
+            avatarUrl: currentUser.avatarUrl || u.avatarUrl
+          };
+        }
+        return u;
+      });
+      setUsers(updated);
+    }
+  }, [isOpen, currentUser]);
+
   // Form states for editing / creating
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
@@ -164,7 +183,7 @@ export default function UserManagementModal({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setMessage({ type: 'error', text: 'Hanya file gambar (JPG, PNG) yang diperbolehkan.' });
+      setMessage({ type: 'error', text: 'Hanya file gambar (JPG, PNG, WEBP) yang diperbolehkan.' });
       return;
     }
 
@@ -172,7 +191,36 @@ export default function UserManagementModal({
     reader.onload = (evt) => {
       const dataUrl = evt.target?.result as string;
       if (dataUrl) {
-        setFormAvatar(dataUrl);
+        // Compress avatar image using in-memory HTML5 Canvas to keep storage lightweight (~15KB)
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 320; // 320x320 optimal square profile size
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            setFormAvatar(compressed);
+            setMessage(null);
+          } else {
+            setFormAvatar(dataUrl);
+            setMessage(null);
+          }
+        };
+        img.src = dataUrl;
       }
     };
     reader.readAsDataURL(file);
@@ -187,8 +235,8 @@ export default function UserManagementModal({
       setMessage({ type: 'error', text: 'Nama Lengkap wajib diisi.' });
       return;
     }
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setMessage({ type: 'error', text: 'Alamat Email tidak valid.' });
+    if (!cleanEmail) {
+      setMessage({ type: 'error', text: 'Email atau Username login wajib diisi.' });
       return;
     }
 
@@ -197,8 +245,8 @@ export default function UserManagementModal({
       return;
     }
 
-    if (formPassword && formPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password minimal 6 karakter.' });
+    if (formPassword && formPassword.length < 3) {
+      setMessage({ type: 'error', text: 'Password minimal 3 karakter.' });
       return;
     }
 
@@ -475,11 +523,11 @@ export default function UserManagementModal({
                   Email / Username Login
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="admin@alhicam.sch.id"
+                  placeholder="Contoh: fatma@01 atau admin@alhicam.sch.id"
                   className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>

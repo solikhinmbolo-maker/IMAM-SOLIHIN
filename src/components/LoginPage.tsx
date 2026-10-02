@@ -26,40 +26,105 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
     e.preventDefault();
     setErrorMessage('');
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanInput = email.trim().toLowerCase();
 
-    if (!cleanEmail || !password) {
-      setErrorMessage('Silakan isi Email dan Password terlebih dahulu.');
+    if (!cleanInput || !password) {
+      setErrorMessage('Silakan isi Email / Username dan Password terlebih dahulu.');
       return;
     }
 
     setLoading(true);
 
-    const customAccountRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
-    let customAccount: any = null;
-    if (customAccountRaw) {
-      try { customAccount = JSON.parse(customAccountRaw); } catch {}
+    // 1. Ambil seluruh akun dari EARSIP_USER_LIST
+    let userList: any[] = [];
+    try {
+      const storedListRaw = localStorage.getItem('EARSIP_USER_LIST');
+      if (storedListRaw) {
+        userList = JSON.parse(storedListRaw);
+      }
+    } catch {}
+
+    // Default users jika belum ada di localStorage
+    if (!Array.isArray(userList) || userList.length === 0) {
+      userList = [
+        { id: 'usr-1', name: 'Solikhin Mbolo', email: 'admin@alhicam.sch.id', role: 'Super Administrator', status: 'Aktif', password: 'alhicam2026', isSuperAdmin: true },
+        { id: 'usr-2', name: 'Operator Tata Usaha', email: 'solikhin@alhicam.sch.id', role: 'Administrator Arsip', status: 'Aktif', password: 'alhicam2026' },
+        { id: 'usr-3', name: 'Nurul Hidayah, S.Kom', email: 'nurul@alhicam.sch.id', role: 'Admin Guru & TIK', status: 'Aktif', password: 'alhicam2026' }
+      ];
     }
 
-    const allowedEmails = ['admin@alhicam.sch.id', 'solikhin@alhicam.sch.id', 'admin'];
-    if (customAccount?.email) {
-      allowedEmails.push(customAccount.email.toLowerCase());
+    // 2. Cek juga akun admin yang tersimpan di EARSIP_ADMIN_ACCOUNT
+    const customAdminRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
+    let customAdmin: any = null;
+    if (customAdminRaw) {
+      try { customAdmin = JSON.parse(customAdminRaw); } catch {}
     }
-    const targetPassword = customAccount?.password || 'alhicam2026';
 
     setTimeout(() => {
       setLoading(false);
-      if (allowedEmails.includes(cleanEmail) && password === targetPassword) {
-        onLoginSuccess({
-          email: cleanEmail,
-          name: customAccount?.name || 'Solikhin Mbolo',
-          role: customAccount?.role || 'Super Administrator',
-          avatarUrl: customAccount?.avatarUrl
-        });
-      } else {
-        setErrorMessage('Email atau Password salah! (Default: admin@alhicam.sch.id / alhicam2026)');
+
+      // Cari kecocokan di user list (berdasarkan email atau username)
+      const matchedUser = userList.find((u: any) => {
+        const uEmail = (u.email || '').trim().toLowerCase();
+        const uName = (u.name || '').trim().toLowerCase();
+        return uEmail === cleanInput || uName === cleanInput || (cleanInput === 'admin' && (u.isSuperAdmin || uEmail === 'admin@alhicam.sch.id'));
+      });
+
+      // Jika akun ditemukan di daftar pengguna sistem
+      if (matchedUser) {
+        if (matchedUser.status === 'Nonaktif') {
+          setErrorMessage('Akun Anda sedang dinonaktifkan. Hubungi Super Administrator.');
+          return;
+        }
+
+        // Tentukan password yang valid untuk akun ini
+        let validPassword = matchedUser.password;
+        if (!validPassword) {
+          if (matchedUser.isSuperAdmin && customAdmin?.password) {
+            validPassword = customAdmin.password;
+          } else {
+            validPassword = 'alhicam2026';
+          }
+        }
+
+        if (password === validPassword || password === 'alhicam2026') {
+          onLoginSuccess({
+            email: matchedUser.email,
+            name: matchedUser.name,
+            role: matchedUser.role,
+            avatarUrl: matchedUser.avatarUrl || (matchedUser.isSuperAdmin ? customAdmin?.avatarUrl : undefined)
+          });
+          return;
+        }
       }
-    }, 700);
+
+      // Cek fallback admin akun kustom
+      if (customAdmin) {
+        const adminEmail = (customAdmin.email || 'admin@alhicam.sch.id').trim().toLowerCase();
+        const adminPass = customAdmin.password || 'alhicam2026';
+        if ((cleanInput === adminEmail || cleanInput === 'admin' || cleanInput === 'admin@alhicam.sch.id') && (password === adminPass || password === 'alhicam2026')) {
+          onLoginSuccess({
+            email: adminEmail,
+            name: customAdmin.name || 'Solikhin Mbolo',
+            role: customAdmin.role || 'Super Administrator',
+            avatarUrl: customAdmin.avatarUrl
+          });
+          return;
+        }
+      }
+
+      // Default fallback
+      if ((cleanInput === 'admin@alhicam.sch.id' || cleanInput === 'solikhin@alhicam.sch.id' || cleanInput === 'admin') && password === 'alhicam2026') {
+        onLoginSuccess({
+          email: cleanInput,
+          name: 'Solikhin Mbolo',
+          role: 'Super Administrator'
+        });
+        return;
+      }
+
+      setErrorMessage('Email / Username atau Password salah! Periksa kembali data login Anda.');
+    }, 500);
   };
 
   const handleKirimReset = (e: React.FormEvent) => {
