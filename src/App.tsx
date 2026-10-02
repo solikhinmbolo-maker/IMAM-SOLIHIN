@@ -1384,9 +1384,9 @@ function doGet(e) {
         </header>
 
         {/* ============================================================== */}
-        {/* REFINED MOBILE HEADER (ORIGINAL DARK WITH RICH GRADIENT & GLOW)*/}
+        {/* REFINED MOBILE HEADER (EXPANDED UPWARD TO COVER STATUS BAR / SAFE AREA) */}
         {/* ============================================================== */}
-        <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-[#080E21] via-[#0F1B3E] to-[#0A132C] text-white px-4 sm:px-6 py-4 border-b-2 border-blue-500/60 shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden">
+        <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-[#080E21] via-[#0F1B3E] to-[#0A132C] text-white px-4 sm:px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3.5 border-b-2 border-blue-500/60 shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden">
           
           {/* Subtle Ambient Gradient Light Reflections (No stiff solid color) */}
           <div className="absolute -top-10 left-1/4 w-48 h-28 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
@@ -1468,7 +1468,7 @@ function doGet(e) {
         </header>
 
         {/* View Contents with top padding for fixed header in mobile */}
-        <div className="p-3.5 sm:p-8 pt-[82px] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
+        <div className="p-3.5 sm:p-8 pt-[calc(env(safe-area-inset-top,0px)+88px)] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
           {activePage === 'dashboard' && (
             <DashboardView
               key={dbVersion}
