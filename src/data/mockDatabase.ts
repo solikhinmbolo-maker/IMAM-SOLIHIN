@@ -894,8 +894,8 @@ export async function syncItemToGoogleCloud(
   try {
     const payload = {
       action: 'UPLOAD_ARSIP',
-      folderId: config.folderId,
-      spreadsheetId: config.spreadsheetId,
+      folderId: config.folderId || '1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ',
+      spreadsheetId: config.spreadsheetId || '1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI',
       id: item.id,
       tanggal: item.tanggal,
       tahun: item.tahun,
@@ -904,9 +904,11 @@ export async function syncItemToGoogleCloud(
       kategori: item.kategori,
       kategoriUtama: item.kategoriUtama,
       namaFile: item.namaFileAsli,
+      namaFileAsli: item.namaFileAsli,
       ukuran: item.ukuran || '1.2 MB',
       uploader: item.uploader,
-      fileData: fileBase64 || item.fileDataUrl || ''
+      fileData: fileBase64 || item.fileDataUrl || '',
+      fileBase64: fileBase64 || item.fileDataUrl || ''
     };
 
     // Google Apps Script requires text/plain or no-cors / standard json
