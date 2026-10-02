@@ -44,7 +44,10 @@ export interface FirestoreErrorInfo {
   };
 }
 
-let isFirestoreQuotaExceeded = typeof window !== 'undefined' && sessionStorage.getItem('FIRESTORE_QUOTA_EXCEEDED') === 'true';
+let isFirestoreQuotaExceeded = typeof window !== 'undefined' && (
+  sessionStorage.getItem('FIRESTORE_QUOTA_EXCEEDED') === 'true' ||
+  localStorage.getItem('FIRESTORE_QUOTA_EXCEEDED') === 'true'
+);
 
 if (isFirestoreQuotaExceeded) {
   try {
@@ -59,6 +62,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     isFirestoreQuotaExceeded = true;
     try {
       sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
+      localStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
       disableNetwork(db).catch(() => {});
     } catch {}
 
@@ -98,10 +102,11 @@ export async function testFirestoreConnection(): Promise<boolean> {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('Quota limit exceeded') || error.message.includes('resource-exhausted'))) {
+    if (error instanceof Error && (error.message.includes('Quota limit exceeded') || error.message.includes('resource-exhausted') || error.message.includes('RESOURCE_EXHAUSTED'))) {
       isFirestoreQuotaExceeded = true;
       try {
         sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
+        localStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
         disableNetwork(db).catch(() => {});
       } catch {}
     }

@@ -15,7 +15,8 @@ import {
   CheckCircle2, 
   AlertCircle,
   ArrowLeft,
-  Save
+  Save,
+  RefreshCw
 } from 'lucide-react';
 import { addAuditLog, DB_KEYS } from '../data/mockDatabase';
 import { syncAllUsersToSupabase, saveSingleUserToSupabase, deleteUserFromSupabase, fetchUsersFromSupabase } from '../supabase';
@@ -106,27 +107,54 @@ export default function UserManagementModal({
   const [showPassword, setShowPassword] = useState(false);
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Refresh user list every time modal is opened
+  // Refresh and auto-sync user list every time modal is opened
   useEffect(() => {
     if (isOpen) {
-      const list = getStoredUserList();
-      // Sync active session avatar/name to master user only
-      const synced = list.map(u => {
-        if (u.id === 'master-superadmin' || u.email.toLowerCase() === 'superadmin') {
-          return {
-            ...u,
-            name: currentUser.name || u.name,
-            avatarUrl: currentUser.avatarUrl || u.avatarUrl
-          };
+      const localList = getStoredUserList();
+      setUsers(localList);
+
+      fetchUsersFromSupabase().then(async cloudUsers => {
+        if (cloudUsers && cloudUsers.length > 0) {
+          const merged = [...cloudUsers];
+          let hasNewLocal = false;
+
+          // Periksa apakah ada akun lokal yang belum masuk ke Supabase (misal: akun baru yang baru ditambah)
+          for (const loc of localList) {
+            const cleanLocEmail = loc.email.toLowerCase().replace(/^@/, '');
+            const found = merged.find(m => m.email.toLowerCase().replace(/^@/, '') === cleanLocEmail);
+            if (!found) {
+              merged.push(loc);
+              hasNewLocal = true;
+              await saveSingleUserToSupabase(loc);
+            }
+          }
+
+          setUsers(merged);
+          saveStoredUserList(merged);
+        } else if (localList.length > 0) {
+          // Jika tabel Supabase masih kosong, unggah semua akun lokal
+          await syncAllUsersToSupabase(localList);
         }
-        return u;
-      });
-      setUsers(synced);
-      saveStoredUserList(synced);
+      }).catch(() => {});
     }
-  }, [isOpen, currentUser]);
+  }, [isOpen]);
+
+  const handleManualSyncSupabase = async () => {
+    setIsSyncing(true);
+    setMessage({ type: 'success', text: 'Menyinkronkan seluruh akun ke Supabase Cloud...' });
+    const res = await syncAllUsersToSupabase(users);
+    setIsSyncing(false);
+    if (res.success) {
+      setMessage({ type: 'success', text: `✓ Berhasil menyinkronkan ${res.count} akun langsung ke tabel public.users Supabase!` });
+      setTimeout(() => setMessage(null), 4000);
+    } else {
+      setMessage({ type: 'error', text: `Gagal sinkronisasi: ${res.error || 'Periksa koneksi Supabase'}` });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -322,28 +350,38 @@ export default function UserManagementModal({
       return;
     }
 
+    const oldEmail = editingUser ? editingUser.email : cleanEmail;
+
     setUsers(updatedList);
     saveStoredUserList(updatedList);
+    setIsSaving(true);
+    setMessage({ type: 'success', text: `Menyimpan ${cleanName} ke database Supabase...` });
 
-    // Simpan langsung ke Supabase Cloud (tabel public.users) beserta foto profil
-    saveSingleUserToSupabase({
+    // Simpan langsung ke Supabase Cloud (tabel public.users)
+    const supaRes = await saveSingleUserToSupabase({
       name: cleanName,
       email: cleanEmail,
       role: isCreatingNew ? formRole : ((editingUser?.id === 'master-superadmin' || editingUser?.isSuperAdmin) ? 'Super Administrator' : formRole),
       password: formPassword || (editingUser?.password || 'superadmin123'),
       avatarUrl: formAvatar
-    }).catch(() => {});
+    }, oldEmail);
 
     // Sinkronkan seluruh list ke database Supabase
-    syncAllUsersToSupabase(updatedList).catch(() => {});
+    await syncAllUsersToSupabase(updatedList);
+    setIsSaving(false);
 
     // Broadcast ke semua tab
     window.dispatchEvent(new Event('storage'));
 
-    setMessage({ type: 'success', text: `✓ Akun ${cleanName} & foto profil berhasil disimpan dan disinkronkan ke Supabase!` });
+    if (supaRes.success) {
+      setMessage({ type: 'success', text: `✓ Akun ${cleanName} berhasil disimpan dan langsung masuk ke tabel Supabase!` });
+    } else {
+      setMessage({ type: 'error', text: `Pemberitahuan: Akun tersimpan di aplikasi (Notice Supabase: ${supaRes.error || 'cek koneksi'})` });
+    }
+
     setTimeout(() => {
       handleCancelForm();
-    }, 700);
+    }, 900);
   };
 
   const handleDeleteUser = (user: SystemUser) => {
@@ -595,10 +633,11 @@ export default function UserManagementModal({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 cursor-pointer flex items-center gap-1.5"
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Simpan Akun</span>
+                  <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
+                  <span>{isSaving ? 'Menyimpan ke Supabase...' : 'Simpan Akun'}</span>
                 </button>
               </div>
 
@@ -614,14 +653,26 @@ export default function UserManagementModal({
                 <span className="text-xs font-semibold text-slate-400">
                   Total {users.length} Akun Terdaftar
                 </span>
-                <button
-                  type="button"
-                  onClick={handleStartCreate}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Tambah Pengguna</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleManualSyncSupabase}
+                    disabled={isSyncing}
+                    className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Kirim & Sinkronkan semua akun ke tabel users di Supabase"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Menyinkronkan...' : '⚡ Sinkronkan Supabase'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartCreate}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Tambah Pengguna</span>
+                  </button>
+                </div>
               </div>
 
               {/* Users Cards */}

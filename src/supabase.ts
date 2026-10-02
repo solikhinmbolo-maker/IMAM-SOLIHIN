@@ -264,75 +264,85 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 }
 
 /**
- * Save / update individual user directly in Supabase 'users' table (matches schema: nama, email, password, role)
+ * Save / update individual user directly in Supabase 'users' table (matches schema: id (uuid), nama, email, password, role)
  */
-export async function saveSingleUserToSupabase(user: { id?: string; name: string; email: string; role?: string; password?: string; avatarUrl?: string }): Promise<boolean> {
+export async function saveSingleUserToSupabase(
+  user: { id?: string; name: string; email: string; role?: string; password?: string; avatarUrl?: string },
+  oldEmail?: string
+): Promise<{ success: boolean; error?: string }> {
   const client = getSupabaseClient();
-  if (!client) return false;
+  if (!client) return { success: false, error: 'Koneksi Supabase belum aktif' };
 
-  const cleanEmail = (user.email || '').trim().toLowerCase();
-  const cleanName = user.name || 'Solikhin Mbolo';
-  const cleanRole = user.role || 'Super Administrator';
+  const cleanEmail = (user.email || '').trim().toLowerCase().replace(/^@/, '');
+  const cleanOldEmail = (oldEmail || '').trim().toLowerCase().replace(/^@/, '');
+  const cleanName = user.name || 'Pengguna';
+  const cleanRole = user.role || 'Administrator Arsip';
   const cleanPassword = user.password || 'superadmin123';
 
+  // UUID v4 format generator
+  const isUuid = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+  const userUuid = isUuid(user.id) ? user.id! : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '60f357d6-b7f8-49a8-8ec4-' + Date.now().toString(16).padEnd(12, '0'));
+
   try {
-    // 1. Cek apakah baris dengan email/username sudah ada di Supabase
-    const { data: existing } = await client
-      .from('users')
-      .select('id, email')
-      .eq('email', cleanEmail)
-      .maybeSingle();
+    // 1. Cek apakah baris dengan email lama / email baru sudah ada di Supabase
+    let query = client.from('users').select('id, email, nama');
+    if (cleanOldEmail && cleanOldEmail !== cleanEmail) {
+      query = query.or(`email.ilike.${cleanOldEmail},email.ilike.${cleanEmail},email.ilike.@${cleanOldEmail},email.ilike.@${cleanEmail}`);
+    } else {
+      query = query.or(`email.ilike.${cleanEmail},email.ilike.@${cleanEmail}`);
+    }
+
+    const { data: results, error: searchErr } = await query.limit(1);
+    const existing = results && results.length > 0 ? results[0] : null;
 
     if (existing && existing.id) {
       // Update data baris yang sudah ada
       const updateData: any = {
         nama: cleanName,
+        email: cleanEmail,
         password: cleanPassword,
         role: cleanRole
       };
-      if (user.avatarUrl) {
-        updateData.avatar_url = user.avatarUrl;
-      }
 
-      let { error } = await client
+      const { error: updateErr } = await client
         .from('users')
         .update(updateData)
         .eq('id', existing.id);
 
-      // Jika error karena kolom avatar_url tidak ada di tabel Supabase, coba update tanpa kolom itu
-      if (error && (error.message.includes('avatar_url') || error.code === '42703')) {
-        delete updateData.avatar_url;
-        const retry = await client.from('users').update(updateData).eq('id', existing.id);
-        error = retry.error;
+      if (updateErr) {
+        console.warn('Supabase update user error:', updateErr.message);
+        return { success: false, error: updateErr.message };
       }
-      return !error;
+      return { success: true };
     } else {
       // Insert data akun baru ke Supabase
       const insertPayload: any = {
+        id: userUuid,
         nama: cleanName,
         email: cleanEmail,
         password: cleanPassword,
         role: cleanRole
       };
-      if (user.avatarUrl) {
-        insertPayload.avatar_url = user.avatarUrl;
-      }
 
-      let { error } = await client
+      const { error: insertErr } = await client
         .from('users')
-        .insert(insertPayload);
+        .insert([insertPayload]);
 
-      // Jika error karena kolom avatar_url tidak ada di tabel Supabase, coba insert tanpa kolom itu
-      if (error && (error.message.includes('avatar_url') || error.code === '42703')) {
-        delete insertPayload.avatar_url;
-        const retry = await client.from('users').insert(insertPayload);
-        error = retry.error;
+      if (insertErr) {
+        console.warn('Supabase insert user notice:', insertErr.message);
+        // Coba insert tanpa ID jika Supabase auto-generate UUID
+        delete insertPayload.id;
+        const { error: retryErr } = await client.from('users').insert([insertPayload]);
+        if (retryErr) {
+          console.error('Supabase retry insert failed:', retryErr.message);
+          return { success: false, error: retryErr.message };
+        }
       }
-      return !error;
+      return { success: true };
     }
-  } catch (err) {
-    console.warn('saveSingleUserToSupabase notice:', err);
-    return false;
+  } catch (err: any) {
+    console.error('saveSingleUserToSupabase exception:', err);
+    return { success: false, error: err?.message || String(err) };
   }
 }
 
@@ -340,7 +350,8 @@ export async function saveSingleUserToSupabase(user: { id?: string; name: string
  * Save user profile data to Supabase 'users' table
  */
 export async function saveUserProfileToSupabase(user: { email: string; name: string; role?: string; avatarUrl?: string; password?: string }): Promise<boolean> {
-  return saveSingleUserToSupabase(user);
+  const res = await saveSingleUserToSupabase(user);
+  return res.success;
 }
 
 /**
@@ -350,8 +361,8 @@ export async function deleteUserFromSupabase(email: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
   try {
-    const cleanEmail = email.trim().toLowerCase();
-    const { error } = await client.from('users').delete().eq('email', cleanEmail);
+    const cleanEmail = email.trim().toLowerCase().replace(/^@/, '');
+    const { error } = await client.from('users').delete().or(`email.ilike.${cleanEmail},email.ilike.@${cleanEmail}`);
     return !error;
   } catch {
     return false;
@@ -361,18 +372,23 @@ export async function deleteUserFromSupabase(email: string): Promise<boolean> {
 /**
  * Sync entire user list to Supabase 'users' table
  */
-export async function syncAllUsersToSupabase(users: Array<{ id?: string; name: string; email: string; role: string; status?: string; password?: string; avatarUrl?: string }>): Promise<boolean> {
+export async function syncAllUsersToSupabase(users: Array<{ id?: string; name: string; email: string; role: string; status?: string; password?: string; avatarUrl?: string }>): Promise<{ success: boolean; count: number; error?: string }> {
   const client = getSupabaseClient();
-  if (!client || !Array.isArray(users) || users.length === 0) return false;
+  if (!client || !Array.isArray(users) || users.length === 0) return { success: false, count: 0 };
 
-  try {
-    for (const u of users) {
-      await saveSingleUserToSupabase(u);
+  let successCount = 0;
+  let lastError = '';
+
+  for (const u of users) {
+    const res = await saveSingleUserToSupabase(u);
+    if (res.success) {
+      successCount++;
+    } else if (res.error) {
+      lastError = res.error;
     }
-    return true;
-  } catch {
-    return false;
   }
+
+  return { success: successCount > 0, count: successCount, error: lastError || undefined };
 }
 
 /**

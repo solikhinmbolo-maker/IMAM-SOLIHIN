@@ -49,7 +49,6 @@ import AuditLogView from './components/AuditLogView';
 import LaporanView from './components/LaporanView';
 import TongSampahView from './components/TongSampahView';
 import PreviewModal from './components/PreviewModal';
-import EditProfileModal from './components/EditProfileModal';
 import UserManagementModal from './components/UserManagementModal';
 import { 
   ArsipItem, 
@@ -283,7 +282,6 @@ export default function App() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showSettingModal, setShowSettingModal] = useState(false);
-  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [settingTab, setSettingTab] = useState<'tampilan' | 'bahasa' | 'akun' | 'cloud' | 'tentang'>('tampilan');
   const [previewItem, setPreviewItem] = useState<ArsipItem | null>(null);
 
@@ -1359,9 +1357,9 @@ function doGet(e) {
 
             <button
               type="button"
-              onClick={() => setShowEditProfileModal(true)}
+              onClick={() => setShowUserModal(true)}
               className="flex items-center gap-3 pl-3 border-l border-slate-700/80 hover:bg-slate-800/80 py-1 px-2 rounded-2xl transition-all cursor-pointer group text-left"
-              title="Klik untuk Edit Nama, Password & Foto Profil"
+              title="Manajemen Pengguna & Profil Akun"
             >
               <div className="text-right">
                 <span className="text-xs font-bold text-white block leading-tight group-hover:text-cyan-300 transition-colors">
@@ -1434,9 +1432,9 @@ function doGet(e) {
             {/* Right: Perfectly Centered & Balanced Profile Trigger */}
             <button
               type="button"
-              onClick={() => setShowEditProfileModal(true)}
+              onClick={() => setShowUserModal(true)}
               className="flex items-center gap-2.5 p-1 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 text-white active:scale-95 transition-all cursor-pointer shadow-md group"
-              title="Klik untuk Edit Profil Pengguna"
+              title="Manajemen Pengguna & Profil"
             >
               <div className="text-right pl-2 hidden sm:block">
                 <span className="text-[11px] font-bold text-white block leading-none truncate max-w-[95px] group-hover:text-cyan-300 transition-colors">
@@ -1529,7 +1527,7 @@ function doGet(e) {
           <div 
             onClick={() => {
               setMobileProfileSheetOpen(false);
-              setShowEditProfileModal(true);
+              setShowUserModal(true);
             }}
             className="flex items-center gap-3.5 pb-4 mb-4 border-b border-slate-800 cursor-pointer hover:bg-slate-800/40 p-2 rounded-2xl transition-colors group"
           >
@@ -1565,7 +1563,7 @@ function doGet(e) {
             <button
               onClick={() => {
                 setMobileProfileSheetOpen(false);
-                setShowEditProfileModal(true);
+                setShowUserModal(true);
               }}
               className="w-full flex items-center justify-between p-3 rounded-xl bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold transition-colors cursor-pointer"
             >
@@ -1573,7 +1571,7 @@ function doGet(e) {
                 <div className="w-7 h-7 rounded-lg bg-blue-500/30 text-blue-300 flex items-center justify-center">
                   <User className="w-4 h-4" />
                 </div>
-                <span>Edit Profil, Nama & Password</span>
+                <span>Manajemen Pengguna & Profil</span>
               </div>
               <ChevronRight className="w-4 h-4 text-blue-400" />
             </button>
@@ -1980,12 +1978,12 @@ function doGet(e) {
                       type="button"
                       onClick={() => {
                         setShowSettingModal(false);
-                        setShowEditProfileModal(true);
+                        setShowUserModal(true);
                       }}
                       className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md flex-shrink-0"
                     >
                       <User className="w-3.5 h-3.5" />
-                      <span>Edit Profil</span>
+                      <span>Manajemen Akun</span>
                     </button>
                   </div>
 
@@ -2325,18 +2323,6 @@ function doGet(e) {
           }
         }}
       />
-
-      {/* 10. EDIT PROFIL & KREDENSIAL MODAL */}
-      {currentUser && (
-        <EditProfileModal
-          isOpen={showEditProfileModal}
-          onClose={() => setShowEditProfileModal(false)}
-          currentUser={currentUser}
-          onSaveSuccess={(updatedUser) => {
-            setCurrentUser(updatedUser);
-          }}
-        />
-      )}
 
     </div>
   );
