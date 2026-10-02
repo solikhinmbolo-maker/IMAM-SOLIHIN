@@ -180,7 +180,7 @@ export async function getFileAttachment(id: string): Promise<string | null> {
   }
 }
 
-// Self-Healing Routine: Clean any large base64 strings and purge legacy demo dummy items
+// Self-Healing Routine: Purge legacy demo dummy items while preserving fileDataUrl for instant local preview
 function sanitizeLocalStorage() {
   if (typeof window === 'undefined') return;
   try {
@@ -196,23 +196,10 @@ function sanitizeLocalStorage() {
       return !isDemoId && !isDemoLink;
     });
 
-    const cleaned = realItemsOnly.map(item => {
-      if (item.fileDataUrl) {
-        fileBlobCache.set(item.id, item.fileDataUrl);
-        saveFileAttachment(item.id, item.fileDataUrl);
-        const { fileDataUrl, ...rest } = item;
-        return rest as ArsipItem;
-      }
-      return item;
-    });
-
-    localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(cleaned));
+    // Keep fileDataUrl intact in localStorage so files open instantly right in the modal after refresh
+    localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(realItemsOnly));
   } catch (err) {
     console.warn('Sanitizing localStorage:', err);
-    try {
-      localStorage.removeItem(DB_KEYS.ARSIP_ITEMS);
-      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify([]));
-    } catch {}
   }
 }
 

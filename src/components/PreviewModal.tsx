@@ -49,9 +49,14 @@ function getDriveEmbedUrl(link?: string): string {
   if (!link || !link.startsWith('http')) return '';
   const match = link.match(/\/d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (match && match[1]) {
-    return `https://drive.google.com/file/d/${match[1]}/preview`;
+    const fileId = match[1];
+    // Do not embed local dummy/placeholder IDs into Google Drive iframe (prevents Google Drive 404 error screen)
+    if (fileId.startsWith('GRU-') || fileId.startsWith('SSW-') || fileId.startsWith('LYN-') || fileId.startsWith('ARS-')) {
+      return '';
+    }
+    return `https://drive.google.com/file/d/${fileId}/preview`;
   }
-  return link;
+  return '';
 }
 
 export default function PreviewModal({ item, onClose, onPrint, onDownload }: PreviewModalProps) {

@@ -39,7 +39,8 @@ import {
   DuplicateCheckResult,
   syncItemToGoogleCloud,
   saveMasterSiswa,
-  saveMasterGuru
+  saveMasterGuru,
+  saveFileAttachment
 } from '../data/mockDatabase';
 
 interface FormUploadViewProps {
@@ -310,6 +311,10 @@ export default function FormUploadView({
       console.warn('Sync warning:', e);
     }
 
+    if (fileBase64) {
+      await saveFileAttachment(newId, fileBase64);
+    }
+
     if (replaceExistingId) {
       replaceArsipItem(replaceExistingId, updatedArsip);
     } else {
@@ -390,6 +395,10 @@ export default function FormUploadView({
         }
       } catch (e) {
         console.warn('Kolektif sync warning:', e);
+      }
+
+      if (fileObj.base64) {
+        await saveFileAttachment(itemToSave.id, fileObj.base64);
       }
 
       if (replaceDuplicates && existing) {
