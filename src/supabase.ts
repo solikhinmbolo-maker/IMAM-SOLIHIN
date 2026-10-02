@@ -269,23 +269,35 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 export async function uploadFileToSupabaseStorage(
   id: string,
   fileName: string,
-  base64DataUrl: string
+  base64OrBlob: string | Blob
 ): Promise<{ success: boolean; publicUrl?: string; message?: string }> {
   const client = getSupabaseClient();
-  if (!client || !base64DataUrl) {
+  if (!client || !base64OrBlob) {
     return { success: false, message: 'Supabase client belum aktif atau file kosong' };
   }
 
   try {
-    const parts = base64DataUrl.split(',');
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const binary = atob(parts[1]);
-    const array = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      array[i] = binary.charCodeAt(i);
+    let blob: Blob;
+    let mimeType = 'application/octet-stream';
+
+    if (base64OrBlob instanceof Blob) {
+      blob = base64OrBlob;
+      mimeType = blob.type || 'application/octet-stream';
+    } else {
+      const parts = base64OrBlob.split(',');
+      if (parts.length > 1) {
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        if (mimeMatch) mimeType = mimeMatch[1];
+        const binary = atob(parts[1]);
+        const array = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          array[i] = binary.charCodeAt(i);
+        }
+        blob = new Blob([array], { type: mimeType });
+      } else {
+        blob = new Blob([base64OrBlob], { type: mimeType });
+      }
     }
-    const blob = new Blob([array], { type: mimeType });
 
     const safeExt = mimeType.includes('pdf') ? '.pdf' : mimeType.includes('png') ? '.png' : '.jpg';
     const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -300,7 +312,13 @@ export async function uploadFileToSupabaseStorage(
 
     if (error) {
       console.warn('Supabase storage upload error:', error);
-      return { success: false, message: error.message };
+      let errorMsg = error.message;
+      if (error.message.includes('Bucket not found') || (error as any).statusCode === 404) {
+        errorMsg = 'Bucket "arsip" belum dibuat di Supabase Storage.';
+      } else if (error.message.includes('row-level security') || (error as any).statusCode === 403 || (error as any).statusCode === '403') {
+        errorMsg = 'Izin upload ditolak (Storage RLS Policy). Jalankan script SQL izin storage di Supabase.';
+      }
+      return { success: false, message: errorMsg };
     }
 
     const { data: publicUrlData } = client.storage
@@ -315,6 +333,51 @@ export async function uploadFileToSupabaseStorage(
   } catch (err: any) {
     console.warn('Supabase storage exception:', err);
     return { success: false, message: err.message || 'Gagal upload ke Supabase Storage' };
+  }
+}
+
+/**
+ * Live test to verify Supabase Storage bucket 'arsip' and RLS permission
+ */
+export async function testSupabaseStorage(): Promise<{ success: boolean; message: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Koneksi Supabase belum aktif.' };
+  }
+
+  try {
+    const testBlob = new Blob(['PING_SMP_ALHICAM'], { type: 'text/plain' });
+    const testPath = `_test_ping_${Date.now()}.txt`;
+
+    const { error } = await client.storage
+      .from('arsip')
+      .upload(testPath, testBlob, { upsert: true });
+
+    if (error) {
+      if (error.message.includes('Bucket not found') || (error as any).statusCode === 404) {
+        return { 
+          success: false, 
+          message: '❌ Bucket "arsip" BELUM DIBUAT di Supabase Storage! Klik "+ New bucket" ➔ nama: "arsip" ➔ centang "Public bucket".' 
+        };
+      }
+      if (error.message.includes('row-level security') || error.message.includes('RLS') || (error as any).statusCode === 403 || (error as any).statusCode === '403') {
+        return { 
+          success: false, 
+          message: '❌ Izin Upload Ditolak (RLS Policy). Jalankan script SQL Storage di menu SQL Editor Supabase.' 
+        };
+      }
+      return { success: false, message: `❌ Gagal akses Storage: ${error.message}` };
+    }
+
+    // Bersihkan file ping
+    await client.storage.from('arsip').remove([testPath]);
+
+    return { 
+      success: true, 
+      message: '✓ Berhasil! Bucket "arsip" aktif & siap menerima file foto/PDF!' 
+    };
+  } catch (err: any) {
+    return { success: false, message: `Error Storage: ${err?.message || String(err)}` };
   }
 }
 

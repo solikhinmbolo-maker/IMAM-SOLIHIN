@@ -77,6 +77,7 @@ import {
   getStoredSupabaseConfig,
   saveStoredSupabaseConfig,
   testSupabaseConnection,
+  testSupabaseStorage,
   subscribeToSupabaseArsip,
   SUPABASE_SQL_SCHEMA,
   sanitizeSupabaseUrl,
@@ -243,6 +244,16 @@ export default function App() {
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [isSyncingToSupabase, setIsSyncingToSupabase] = useState(false);
   const [copiedSqlSchema, setCopiedSqlSchema] = useState(false);
+  const [isTestingStorage, setIsTestingStorage] = useState(false);
+  const [storageTestStatus, setStorageTestStatus] = useState<string>('');
+
+  const handleTestSupabaseStorage = async () => {
+    setIsTestingStorage(true);
+    setStorageTestStatus('Menguji akses ke Supabase Storage (bucket "arsip")...');
+    const result = await testSupabaseStorage();
+    setStorageTestStatus(result.message);
+    setIsTestingStorage(false);
+  };
 
   const handleTestSupabaseConnection = async () => {
     setIsTestingSupabase(true);
@@ -1931,7 +1942,17 @@ function doGet(e) {
                           className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
-                          <span>{isTestingSupabase ? 'Menguji...' : '⚡ Uji Koneksi Supabase'}</span>
+                          <span>{isTestingSupabase ? 'Menguji...' : '⚡ Uji Database'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleTestSupabaseStorage}
+                          disabled={isTestingStorage}
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingStorage ? 'animate-spin' : ''}`} />
+                          <span>{isTestingStorage ? 'Menguji...' : '📦 Uji Storage (Bucket arsip)'}</span>
                         </button>
 
                         <button
@@ -1966,6 +1987,16 @@ function doGet(e) {
                           : 'bg-amber-950/80 text-amber-300 border border-amber-800'
                       }`}>
                         {supabaseTestStatus}
+                      </div>
+                    )}
+
+                    {storageTestStatus && (
+                      <div className={`p-3 rounded-xl text-xs font-medium ${
+                        storageTestStatus.includes('✓') 
+                          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800' 
+                          : 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                      }`}>
+                        {storageTestStatus}
                       </div>
                     )}
                   </div>
