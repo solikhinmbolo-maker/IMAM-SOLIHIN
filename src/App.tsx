@@ -1314,13 +1314,26 @@ function doGet(e) {
 
         {/* Sidebar Footer System Info */}
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/70">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm flex-shrink-0">
-              <Shield className="w-4 h-4" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm flex-shrink-0">
+                <Shield className="w-4 h-4" />
+              </div>
+              <p className="text-xs font-semibold text-white tracking-wide truncate">
+                E-Arsip Al-hicamV1.0
+              </p>
             </div>
-            <p className="text-xs font-semibold text-white tracking-wide truncate">
-              E-Arsip Al-hicamV1.0
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowLogoutModal(true);
+                setMobileSidebarOpen(false);
+              }}
+              className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all cursor-pointer flex items-center justify-center flex-shrink-0 active:scale-95 shadow-sm"
+              title="Keluar dari Sistem (Logout)"
+            >
+              <Power className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
