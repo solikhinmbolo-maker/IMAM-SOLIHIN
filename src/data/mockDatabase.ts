@@ -173,7 +173,7 @@ export async function getFileAttachment(id: string): Promise<string | null> {
   }
 }
 
-// Self-Healing Routine: Clean any large base64 strings from existing LocalStorage
+// Self-Healing Routine: Clean any large base64 strings and purge legacy demo dummy items
 function sanitizeLocalStorage() {
   if (typeof window === 'undefined') return;
   try {
@@ -181,12 +181,16 @@ function sanitizeLocalStorage() {
     if (!raw) return;
 
     const parsed: ArsipItem[] = JSON.parse(raw);
-    let needsClean = false;
+    
+    // Purge legacy demo items from older versions
+    const realItemsOnly = parsed.filter(item => {
+      const isDemoId = item.id.startsWith('SSW-') || item.id.startsWith('GRU-') || item.id.startsWith('LYN-');
+      const isDemoLink = item.linkDrive && item.linkDrive.includes('demo-');
+      return !isDemoId && !isDemoLink;
+    });
 
-    const cleaned = parsed.map(item => {
+    const cleaned = realItemsOnly.map(item => {
       if (item.fileDataUrl) {
-        needsClean = true;
-        // Move to memory cache and IndexedDB
         fileBlobCache.set(item.id, item.fileDataUrl);
         saveFileAttachment(item.id, item.fileDataUrl);
         const { fileDataUrl, ...rest } = item;
@@ -195,15 +199,12 @@ function sanitizeLocalStorage() {
       return item;
     });
 
-    if (needsClean) {
-      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(cleaned));
-    }
+    localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(cleaned));
   } catch (err) {
-    console.warn('Sanitizing bloated localStorage:', err);
+    console.warn('Sanitizing localStorage:', err);
     try {
-      // In case quota is completely frozen, reset with clean seed items
       localStorage.removeItem(DB_KEYS.ARSIP_ITEMS);
-      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
+      localStorage.setItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify([]));
     } catch {}
   }
 }
@@ -866,9 +867,8 @@ export async function fetchLiveFullDataFromGoogle(): Promise<{
       let siswaCount = 0;
       let guruCount = 0;
 
-      // 1. Sinkronisasi Berkas Arsip
-      if (Array.isArray(data.items) && data.items.length > 0) {
-        const currentLocal = getStoredArsip();
+      // 1. Sinkronisasi Berkas Arsip (Google Spreadsheet = SINGLE SOURCE OF TRUTH)
+      if (Array.isArray(data.items)) {
         const remoteItems: ArsipItem[] = data.items.map((it: any) => ({
           id: it.id || `ARS-${Date.now()}`,
           tanggal: it.tanggal || new Date().toLocaleDateString('id-ID'),
@@ -883,28 +883,17 @@ export async function fetchLiveFullDataFromGoogle(): Promise<{
           linkDrive: it.driveUrl || it.linkDrive || '#'
         }));
 
-        const mergedMap = new Map<string, ArsipItem>();
-        currentLocal.forEach(it => mergedMap.set(it.id, it));
-        remoteItems.forEach(it => {
-          const existing = mergedMap.get(it.id);
-          if (existing && existing.fileDataUrl) {
-            mergedMap.set(it.id, { ...it, fileDataUrl: existing.fileDataUrl });
-          } else {
-            mergedMap.set(it.id, it);
-          }
-        });
-
-        const finalMerged = Array.from(mergedMap.values());
-        safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(finalMerged.map(f => {
+        // DIRECTLY OVERWRITE local storage with remote server items!
+        safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(remoteItems.map(f => {
           const c = { ...f };
           delete c.fileDataUrl;
           return c;
         })));
-        itemsCount = finalMerged.length;
+        itemsCount = remoteItems.length;
       }
 
       // 2. Sinkronisasi Data Master Siswa
-      if (Array.isArray(data.siswa) && data.siswa.length > 0) {
+      if (Array.isArray(data.siswa)) {
         const remoteSiswa: MasterSiswaItem[] = data.siswa.map((s: any, idx: number) => ({
           id: `S-${s.nisn || idx + 1}`,
           nama: s.nama || '-',
@@ -912,20 +901,24 @@ export async function fetchLiveFullDataFromGoogle(): Promise<{
           kelas: s.kelas || '-',
           nisn: s.nisn || '-'
         }));
-        safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(remoteSiswa));
-        siswaCount = remoteSiswa.length;
+        if (remoteSiswa.length > 0) {
+          safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(remoteSiswa));
+          siswaCount = remoteSiswa.length;
+        }
       }
 
       // 3. Sinkronisasi Data Master Guru
-      if (Array.isArray(data.guru) && data.guru.length > 0) {
+      if (Array.isArray(data.guru)) {
         const remoteGuru: MasterGuruItem[] = data.guru.map((g: any, idx: number) => ({
           id: `G-${g.nuptk || idx + 1}`,
           nama: g.nama || '-',
           nuptk: g.nuptk || '-',
           jabatan: g.jabatan || '-'
         }));
-        safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(remoteGuru));
-        guruCount = remoteGuru.length;
+        if (remoteGuru.length > 0) {
+          safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(remoteGuru));
+          guruCount = remoteGuru.length;
+        }
       }
 
       // Emit custom update event so active views re-render smoothly
