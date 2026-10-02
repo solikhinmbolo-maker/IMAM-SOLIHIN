@@ -62,7 +62,9 @@ import {
   syncItemToGoogleCloud,
   fetchLiveFullDataFromGoogle,
   saveFileAttachment,
-  getFileAttachment
+  getFileAttachment,
+  GOOGLE_APPS_SCRIPT_ROBUST_CODE,
+  testGoogleWebhook
 } from './data/mockDatabase';
 import { 
   subscribeToArsip, 
@@ -276,6 +278,20 @@ export default function App() {
     const updated = { ...supabaseConfig, url: cleanUrl, anonKey };
     setSupabaseConfig(updated);
     saveStoredSupabaseConfig(updated);
+  };
+
+  const handleSaveWebhookUrl = (url: string) => {
+    const updated = { ...syncConfig, webhookUrl: url.trim() };
+    setSyncConfig(updated);
+    saveStoredSyncConfig(updated);
+  };
+
+  const handleTestGAS = async () => {
+    setIsTestingConn(true);
+    setTestConnStatus('Menguji koneksi ke Webhook Google Apps Script...');
+    const res = await testGoogleWebhook(syncConfig.webhookUrl);
+    setTestConnStatus(res.message);
+    setIsTestingConn(false);
   };
 
   // Real-time Cloud Database Listeners (Multi-Device Auto Sync)
@@ -1995,6 +2011,70 @@ function doGet(e) {
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
+                  </div>
+
+                  {/* Google Apps Script Webhook Manager & Live Tester */}
+                  <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-900/50 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <Cloud className="w-5 h-5 text-cyan-400" />
+                        <div>
+                          <h4 className="text-xs font-bold text-white">Integrasi Webhook Google Apps Script</h4>
+                          <p className="text-[10px] text-slate-400">Jembatan otomatis penyimpanan file fisik ke Google Drive</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-[10px] font-bold border border-cyan-500/30">
+                        Drive Webhook V3.0
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-semibold text-slate-300">
+                        URL Webhook Google Apps Script (/exec)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        value={syncConfig.webhookUrl}
+                        onChange={(e) => handleSaveWebhookUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500 placeholder-slate-600"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleTestGAS}
+                        disabled={isTestingConn}
+                        className="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingConn ? 'animate-spin' : ''}`} />
+                        <span>{isTestingConn ? 'Menguji...' : '⚡ Uji Koneksi Google Apps Script'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_ROBUST_CODE);
+                          setCopiedGAS(true);
+                          setTimeout(() => setCopiedGAS(false), 3000);
+                        }}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        {copiedGAS ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                        <span>{copiedGAS ? '✓ Script V3.0 Tersalin!' : '📋 Salin Kode Apps Script V3.0'}</span>
+                      </button>
+                    </div>
+
+                    {testConnStatus && (
+                      <div className={`p-3 rounded-xl text-xs font-medium leading-relaxed ${
+                        testConnStatus.includes('✓') 
+                          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800' 
+                          : 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                      }`}>
+                        {testConnStatus}
+                      </div>
+                    )}
                   </div>
 
                 </div>

@@ -264,6 +264,61 @@ export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
 }
 
 /**
+ * Upload file base64 directly to Supabase Storage bucket 'arsip'
+ */
+export async function uploadFileToSupabaseStorage(
+  id: string,
+  fileName: string,
+  base64DataUrl: string
+): Promise<{ success: boolean; publicUrl?: string; message?: string }> {
+  const client = getSupabaseClient();
+  if (!client || !base64DataUrl) {
+    return { success: false, message: 'Supabase client belum aktif atau file kosong' };
+  }
+
+  try {
+    const parts = base64DataUrl.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const binary = atob(parts[1]);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      array[i] = binary.charCodeAt(i);
+    }
+    const blob = new Blob([array], { type: mimeType });
+
+    const safeExt = mimeType.includes('pdf') ? '.pdf' : mimeType.includes('png') ? '.png' : '.jpg';
+    const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${id}_${cleanName}${cleanName.includes('.') ? '' : safeExt}`;
+
+    const { error } = await client.storage
+      .from('arsip')
+      .upload(storagePath, blob, {
+        contentType: mimeType,
+        upsert: true
+      });
+
+    if (error) {
+      console.warn('Supabase storage upload error:', error);
+      return { success: false, message: error.message };
+    }
+
+    const { data: publicUrlData } = client.storage
+      .from('arsip')
+      .getPublicUrl(storagePath);
+
+    return {
+      success: true,
+      publicUrl: publicUrlData.publicUrl,
+      message: 'File berhasil diunggah ke Supabase Storage!'
+    };
+  } catch (err: any) {
+    console.warn('Supabase storage exception:', err);
+    return { success: false, message: err.message || 'Gagal upload ke Supabase Storage' };
+  }
+}
+
+/**
  * Subscribe to realtime changes on Supabase 'arsip' table
  */
 export function subscribeToSupabaseArsip(onUpdate: (items: ArsipItem[]) => void) {
@@ -370,4 +425,18 @@ CREATE POLICY "Public Full Access Guru" ON public.master_guru FOR ALL USING (tru
 ALTER PUBLICATION supabase_realtime ADD TABLE public.arsip;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.master_siswa;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.master_guru;
+
+-- 6. IZIN AKSES STORAGE BUCKET 'arsip' (Upload & Baca Berkas Fisik)
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('arsip', 'arsip', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DROP POLICY IF EXISTS "Public Storage Upload" ON storage.objects;
+CREATE POLICY "Public Storage Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'arsip');
+
+DROP POLICY IF EXISTS "Public Storage Read" ON storage.objects;
+CREATE POLICY "Public Storage Read" ON storage.objects FOR SELECT USING (bucket_id = 'arsip');
+
+DROP POLICY IF EXISTS "Public Storage Update" ON storage.objects;
+CREATE POLICY "Public Storage Update" ON storage.objects FOR UPDATE USING (bucket_id = 'arsip');
 `;

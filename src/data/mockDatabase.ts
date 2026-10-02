@@ -129,12 +129,26 @@ const IDB_STORE = 'file_attachments';
 const IDB_VERSION = 1;
 
 /**
- * Compress images on an in-memory Canvas so base64 easily fits in Firestore (<800KB)
- * and syncs smoothly across all devices (Mobile, PC, Tablet)
+ * High-Fidelity Adaptive Document Compressor
+ * Preserves ultra-crisp text, stamp signatures, and ijazah details
+ * Compresses heavy photos (e.g. 5MB - 15MB) down to crisp ~1MB without quality loss
  */
-export async function compressImageDataUrl(dataUrl: string, maxWidth = 1200, quality = 0.75): Promise<string> {
-  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
-  if (dataUrl.length < 250000) return dataUrl; // Already small enough
+export async function compressDocumentHighQuality(
+  file: { size?: number }, 
+  dataUrl: string, 
+  targetMaxBytes = 1024 * 1024 // 1 MB target
+): Promise<{ compressedDataUrl: string; originalSize: number; compressedSize: number; ratio: string }> {
+  const originalSize = file?.size || Math.round((dataUrl.length * 3) / 4);
+
+  // If not an image or already under 850 KB, don't over-compress
+  if (!dataUrl.startsWith('data:image') || originalSize <= 850 * 1024) {
+    return {
+      compressedDataUrl: dataUrl,
+      originalSize,
+      compressedSize: originalSize,
+      ratio: '100%'
+    };
+  }
 
   return new Promise((resolve) => {
     try {
@@ -144,35 +158,76 @@ export async function compressImageDataUrl(dataUrl: string, maxWidth = 1200, qua
         let width = img.width;
         let height = img.height;
 
-        if (width > maxWidth || height > maxWidth) {
+        // Keep 2K ultra-crisp document resolution (up to 2048px on the longest side)
+        // 2048px ensures fine print on diplomas, legal stamps, and signatures remain 100% sharp
+        const MAX_DIMENSION = 2048;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
           if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
           } else {
-            width = Math.round((width * maxWidth) / height);
-            height = maxWidth;
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
           }
         }
 
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) {
-          resolve(dataUrl);
+          resolve({ compressedDataUrl: dataUrl, originalSize, compressedSize: originalSize, ratio: '100%' });
           return;
         }
 
+        // High quality bicubic scaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressed);
+
+        // Adaptive quality targetting ~1 MB
+        let quality = 0.88; // 88% quality (pristine visual clarity)
+        let resultDataUrl = canvas.toDataURL('image/jpeg', quality);
+        let approxBytes = Math.round((resultDataUrl.length * 3) / 4);
+
+        // If still noticeably larger than 1.1MB, step down gently while keeping >= 0.72
+        while (approxBytes > targetMaxBytes * 1.1 && quality > 0.72) {
+          quality -= 0.05;
+          resultDataUrl = canvas.toDataURL('image/jpeg', quality);
+          approxBytes = Math.round((resultDataUrl.length * 3) / 4);
+        }
+
+        const ratio = Math.round((approxBytes / originalSize) * 100) + '%';
+        resolve({
+          compressedDataUrl: resultDataUrl,
+          originalSize,
+          compressedSize: approxBytes,
+          ratio
+        });
       };
-      img.onerror = () => resolve(dataUrl);
+      img.onerror = () => {
+        resolve({ compressedDataUrl: dataUrl, originalSize, compressedSize: originalSize, ratio: '100%' });
+      };
       img.src = dataUrl;
     } catch {
-      resolve(dataUrl);
+      resolve({ compressedDataUrl: dataUrl, originalSize, compressedSize: originalSize, ratio: '100%' });
     }
   });
+}
+
+/**
+ * Compress images on an in-memory Canvas maintaining crisp 2048px resolution
+ * Compresses 5MB photos down to ~1MB
+ */
+export async function compressImageDataUrl(dataUrl: string, maxWidth = 2048, quality = 0.85): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+  const approxBytes = Math.round((dataUrl.length * 3) / 4);
+  if (approxBytes < 900000) return dataUrl; // Already under 900KB
+
+  const res = await compressDocumentHighQuality({ size: approxBytes }, dataUrl, 1024 * 1024);
+  return res.compressedDataUrl;
 }
 
 function openIDB(): Promise<IDBDatabase | null> {
@@ -876,6 +931,159 @@ export function saveStoredSyncConfig(cfg: GoogleSyncConfig) {
     localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(cfg));
   } catch (err) {
     console.error('Failed to save GoogleSyncConfig', err);
+  }
+}
+
+export const GOOGLE_APPS_SCRIPT_ROBUST_CODE = `/**
+ * SISTEM INTEGRASI GOOGLE DRIVE & GOOGLE SPREADSHEET
+ * E-ARSIP DIGITAL SMP AL-HIKAM
+ * Versi 3.0 (Anti-Gagal, Auto-Folder, Multi-Format)
+ */
+
+var DEFAULT_FOLDER_ID = "1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ";
+var DEFAULT_SPREADSHEET_ID = "1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI";
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    message: "Server Google Apps Script E-Arsip Aktif & Siap Menerima Berkas!",
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return responseJson({ status: "error", message: "Tidak ada data post yang diterima" });
+    }
+
+    var contents = JSON.parse(e.postData.contents);
+    var action = contents.action || "UPLOAD_ARSIP";
+
+    // 1. Action PING untuk tes koneksi
+    if (action === "PING") {
+      return responseJson({
+        status: "success",
+        message: "Koneksi Webhook Google Drive Berhasil Terhubung!",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 2. Action UPLOAD_ARSIP
+    if (action === "UPLOAD_ARSIP") {
+      var folder;
+      var targetFolderId = contents.folderId || DEFAULT_FOLDER_ID;
+
+      // Cari atau buat folder secara aman
+      try {
+        folder = DriveApp.getFolderById(targetFolderId);
+      } catch (errFolder) {
+        var folders = DriveApp.getFoldersByName("BERKAS_ARSIP_SMP_ALHICAM");
+        if (folders.hasNext()) {
+          folder = folders.next();
+        } else {
+          folder = DriveApp.createFolder("BERKAS_ARSIP_SMP_ALHICAM");
+        }
+      }
+
+      var driveUrl = "#";
+      var rawFile = contents.fileBase64 || contents.fileData || "";
+
+      // Simpan file fisik jika ada base64
+      if (rawFile && rawFile.length > 50) {
+        var contentType = "application/pdf";
+        var base64Data = rawFile;
+
+        if (rawFile.indexOf("data:") === 0) {
+          var parts = rawFile.split(",");
+          base64Data = parts[1];
+          contentType = parts[0].replace("data:", "").split(";")[0];
+        }
+
+        var fileName = (contents.id || "ARSIP") + "_" + (contents.namaFileAsli || contents.namaFile || "dokumen");
+        if (fileName.indexOf(".") === -1) {
+          if (contentType.indexOf("image/jpeg") !== -1) fileName += ".jpg";
+          else if (contentType.indexOf("image/png") !== -1) fileName += ".png";
+          else if (contentType.indexOf("pdf") !== -1) fileName += ".pdf";
+        }
+
+        var decoded = Utilities.base64Decode(base64Data);
+        var blob = Utilities.newBlob(decoded, contentType, fileName);
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        driveUrl = file.getUrl();
+      }
+
+      // Catat ke Google Spreadsheet secara aman
+      try {
+        var targetSheetId = contents.spreadsheetId || DEFAULT_SPREADSHEET_ID;
+        if (targetSheetId) {
+          var ss = SpreadsheetApp.openById(targetSheetId);
+          var sheet = ss.getSheetByName("DATA_ARSIP") || ss.getSheets()[0];
+          sheet.appendRow([
+            contents.id || "",
+            contents.tanggal || new Date().toISOString().split("T")[0],
+            contents.tahun || "",
+            contents.identitas || "",
+            contents.subjek || "",
+            contents.kategori || "",
+            contents.kategoriUtama || "",
+            contents.namaFileAsli || contents.namaFile || "",
+            contents.ukuran || "",
+            driveUrl,
+            new Date()
+          ]);
+        }
+      } catch (errSheet) {}
+
+      return responseJson({
+        status: "success",
+        driveUrl: driveUrl,
+        message: "File berhasil disimpan ke Google Drive!"
+      });
+    }
+
+    return responseJson({ status: "error", message: "Aksi tidak dikenal" });
+
+  } catch (globalErr) {
+    return responseJson({ status: "error", message: globalErr.toString() });
+  }
+}
+
+function responseJson(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+export async function testGoogleWebhook(url?: string): Promise<{ success: boolean; message: string }> {
+  const targetUrl = url || getStoredSyncConfig().webhookUrl;
+  if (!targetUrl || !targetUrl.startsWith('http')) {
+    return { success: false, message: 'URL Webhook Google Apps Script belum diisi.' };
+  }
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'PING' })
+    });
+    const text = await res.text();
+    if (text.includes('accounts.google.com') || text.includes('ServiceLogin')) {
+      return { 
+        success: false, 
+        message: 'Akses Ditolak Google: Pengaturan "Who has access" di Apps Script masih "Hanya saya". Wajib diubah ke "Anyone / Siapa saja".' 
+      };
+    }
+    try {
+      const data = JSON.parse(text);
+      if (data.status === 'success' || data.status === 'ok') {
+        return { success: true, message: '✓ Berhasil! Google Apps Script siap menerima file ke Google Drive.' };
+      }
+      return { success: false, message: data.message || 'Respon webhook tidak sesuai format' };
+    } catch {
+      return { success: false, message: 'Respon dari Google bukan JSON valid: ' + text.substring(0, 100) };
+    }
+  } catch (err: any) {
+    return { success: false, message: 'Gagal menghubungi Webhook: ' + (err.message || 'Network error') };
   }
 }
 

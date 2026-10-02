@@ -163,18 +163,35 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
         if (data) {
           setFileData(data);
         } else {
-          const driveEmbed = getDriveEmbedUrl(item.linkDrive);
-          if (driveEmbed) {
-            setFileData(driveEmbed);
+          // If item has a valid remote URL from Supabase Storage or Google Drive
+          if (item.linkDrive && item.linkDrive.startsWith('http') && !item.linkDrive.includes(item.id + '/view')) {
+            if (item.linkDrive.includes('supabase.co')) {
+              setFileData(item.linkDrive);
+            } else {
+              const driveEmbed = getDriveEmbedUrl(item.linkDrive);
+              if (driveEmbed) {
+                setFileData(driveEmbed);
+              } else {
+                setFileData(generateDocumentSvgDataUrl(item));
+              }
+            }
           } else {
             setFileData(generateDocumentSvgDataUrl(item));
           }
         }
       })
       .catch(() => {
-        const driveEmbed = getDriveEmbedUrl(item.linkDrive);
-        if (driveEmbed) {
-          setFileData(driveEmbed);
+        if (item.linkDrive && item.linkDrive.startsWith('http') && !item.linkDrive.includes(item.id + '/view')) {
+          if (item.linkDrive.includes('supabase.co')) {
+            setFileData(item.linkDrive);
+          } else {
+            const driveEmbed = getDriveEmbedUrl(item.linkDrive);
+            if (driveEmbed) {
+              setFileData(driveEmbed);
+            } else {
+              setFileData(generateDocumentSvgDataUrl(item));
+            }
+          }
         } else {
           setFileData(generateDocumentSvgDataUrl(item));
         }

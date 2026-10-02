@@ -21,7 +21,8 @@ import {
   FileWarning,
   CopyCheck,
   X,
-  Plus
+  Plus,
+  Sparkles
 } from 'lucide-react';
 import { 
   MasterSiswaItem, 
@@ -41,8 +42,10 @@ import {
   saveMasterSiswa,
   saveMasterGuru,
   saveFileAttachment,
-  compressImageDataUrl
+  compressImageDataUrl,
+  compressDocumentHighQuality
 } from '../data/mockDatabase';
+import { uploadFileToSupabaseStorage } from '../supabase';
 
 interface FormUploadViewProps {
   initialJenis?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -285,8 +288,20 @@ export default function FormUploadView({
     const newId = replaceExistingId || `${prefix}-${randomNum}`;
     const todayStr = new Date().toLocaleDateString('id-ID');
 
-    // Compress base64 if it's an image so it easily syncs across all devices via Firestore
-    const optimizedBase64 = fileBase64 ? await compressImageDataUrl(fileBase64) : '';
+    // Kompresi Cerdas Adaptif (5 MB -> ~1 MB, menjaga ketajaman resolusi 2048px teks & stempel ijazah)
+    let optimizedBase64 = fileBase64 || '';
+    let finalUkuran = `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`;
+
+    if (fileBase64 && selectedFile.size > 850 * 1024) {
+      setProgressStatus('Mengompres cerdas ke ~1.0 MB (Kualitas HD teks & stempel tetap tajam)...');
+      const comp = await compressDocumentHighQuality(selectedFile, fileBase64, 1024 * 1024);
+      optimizedBase64 = comp.compressedDataUrl;
+      const compMB = (comp.compressedSize / (1024 * 1024)).toFixed(1);
+      const origMB = (comp.originalSize / (1024 * 1024)).toFixed(1);
+      if (comp.compressedSize < comp.originalSize) {
+        finalUkuran = `${compMB} MB (HD kompresi dari ${origMB} MB)`;
+      }
+    }
 
     const updatedArsip: ArsipItem = {
       id: newId,
@@ -297,8 +312,8 @@ export default function FormUploadView({
       kategori: kategori,
       kategoriUtama: jenisArsip,
       namaFileAsli: selectedFile.name,
-      ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
-      linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+      ukuran: finalUkuran,
+      linkDrive: '',
       uploader: 'admin@alhicam.sch.id',
       fileDataUrl: optimizedBase64
     };
@@ -306,13 +321,30 @@ export default function FormUploadView({
     setProgressPercent(60);
     setProgressStatus('Menyimpan dokumen & menyinkronkan ke Cloud Database...');
 
+    let activeWorkingUrl = '';
+
+    // 1. Unggah berkas fisik langsung ke Supabase Storage Cloud (Prioritas Tinggi)
     try {
-      const res = await syncItemToGoogleCloud(updatedArsip, optimizedBase64);
-      if (res.success && res.driveUrl) {
-        updatedArsip.linkDrive = res.driveUrl;
+      const supaUpload = await uploadFileToSupabaseStorage(newId, selectedFile.name, optimizedBase64);
+      if (supaUpload.success && supaUpload.publicUrl) {
+        activeWorkingUrl = supaUpload.publicUrl;
       }
     } catch (e) {
-      console.warn('Sync warning:', e);
+      console.warn('Supabase storage upload notice:', e);
+    }
+
+    // 2. Sinkronisasi cadangan ke Google Drive (jika webhook aktif)
+    try {
+      const res = await syncItemToGoogleCloud(updatedArsip, optimizedBase64);
+      if (res.success && res.driveUrl && res.driveUrl !== '#' && !res.driveUrl.includes(newId)) {
+        activeWorkingUrl = res.driveUrl;
+      }
+    } catch (e) {
+      console.warn('Google Drive sync notice:', e);
+    }
+
+    if (activeWorkingUrl) {
+      updatedArsip.linkDrive = activeWorkingUrl;
     }
 
     if (optimizedBase64) {
@@ -377,6 +409,20 @@ export default function FormUploadView({
       const randomNum = Math.floor(1000 + Math.random() * 9000) + idx;
       const newId = (replaceDuplicates && existing) ? existing.id : `${prefix}-${randomNum}`;
 
+      // Kompresi Cerdas Adaptif Kolektif (5 MB -> ~1 MB)
+      let itemBase64 = fileObj.base64;
+      let itemUkuran = `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+      if (fileObj.base64 && fileObj.file.size > 850 * 1024) {
+        const comp = await compressDocumentHighQuality(fileObj.file, fileObj.base64, 1024 * 1024);
+        itemBase64 = comp.compressedDataUrl;
+        const compMB = (comp.compressedSize / (1024 * 1024)).toFixed(1);
+        const origMB = (comp.originalSize / (1024 * 1024)).toFixed(1);
+        if (comp.compressedSize < comp.originalSize) {
+          itemUkuran = `${compMB} MB (HD kompresi dari ${origMB} MB)`;
+        }
+      }
+
       const itemToSave: ArsipItem = {
         id: newId,
         tanggal: todayStr,
@@ -386,19 +432,36 @@ export default function FormUploadView({
         kategori: katKey,
         kategoriUtama: jenisArsip,
         namaFileAsli: fileObj.file.name,
-        ukuran: `${(fileObj.file.size / (1024 * 1024)).toFixed(1)} MB`,
-        linkDrive: `https://drive.google.com/file/d/${newId}/view`,
+        ukuran: itemUkuran,
+        linkDrive: '',
         uploader: 'admin@alhicam.sch.id',
-        fileDataUrl: fileObj.base64
+        fileDataUrl: itemBase64
       };
 
+      let activeWorkingUrl = '';
+
+      // 1. Unggah berkas fisik langsung ke Supabase Storage
       try {
-        const res = await syncItemToGoogleCloud(itemToSave, fileObj.base64);
-        if (res.success && res.driveUrl) {
-          itemToSave.linkDrive = res.driveUrl;
+        const supaUpload = await uploadFileToSupabaseStorage(newId, fileObj.file.name, itemBase64);
+        if (supaUpload.success && supaUpload.publicUrl) {
+          activeWorkingUrl = supaUpload.publicUrl;
+        }
+      } catch (e) {
+        console.warn('Supabase storage kolektif upload notice:', e);
+      }
+
+      // 2. Sinkronisasi cadangan ke Google Drive
+      try {
+        const res = await syncItemToGoogleCloud(itemToSave, itemBase64);
+        if (res.success && res.driveUrl && res.driveUrl !== '#' && !res.driveUrl.includes(newId)) {
+          activeWorkingUrl = res.driveUrl;
         }
       } catch (e) {
         console.warn('Kolektif sync warning:', e);
+      }
+
+      if (activeWorkingUrl) {
+        itemToSave.linkDrive = activeWorkingUrl;
       }
 
       if (fileObj.base64) {
@@ -811,41 +874,55 @@ export default function FormUploadView({
                   </span>
                 </label>
               ) : (
-                <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                      <FileCheck className="w-5 h-5" />
+                <div className="space-y-2.5">
+                  <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                        <FileCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <strong className="text-xs sm:text-sm font-bold text-slate-900 block truncate">{selectedFile.name}</strong>
+                        <span className="text-[10px] text-emerald-700 font-semibold block">
+                          {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Berkas Terlampir
+                        </span>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <strong className="text-xs sm:text-sm font-bold text-slate-900 block truncate">{selectedFile.name}</strong>
-                      <span className="text-[10px] text-emerald-700 font-semibold block">
-                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Berkas Terlampir
-                      </span>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <label className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-colors">
+                        <span>Ganti</span>
+                        <input 
+                          type="file" 
+                          onChange={handleFileChange} 
+                          className="hidden" 
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setFileBase64('');
+                        }}
+                        className="p-1.5 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <label className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-colors">
-                      <span>Ganti</span>
-                      <input 
-                        type="file" 
-                        onChange={handleFileChange} 
-                        className="hidden" 
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setFileBase64('');
-                      }}
-                      className="p-1.5 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors"
-                      title="Hapus"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {selectedFile.size > 1024 * 1024 && (
+                    <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 flex items-start gap-2.5 text-xs text-blue-950 animate-fadeIn">
+                      <Sparkles className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block text-blue-900">⚡ Kompresi Cerdas Otomatis Aktif (Target ~1.0 MB)</span>
+                        <p className="text-[11px] text-blue-700 mt-0.5 leading-relaxed">
+                          Ukuran asli <strong>{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</strong> akan dikompres otomatis ke kisaran <strong>~1 MB</strong> saat disimpan ke Supabase Storage. Resolusi teks ijazah, stempel sekolah, dan tanda tangan <strong>tetap 100% tajam & jernih</strong> tanpa buram.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

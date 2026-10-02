@@ -8,7 +8,8 @@ import {
   deleteDoc, 
   getDocs, 
   onSnapshot,
-  getDocFromServer
+  getDocFromServer,
+  disableNetwork
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { ArsipItem, MasterSiswa, MasterGuru } from './types/arsip';
@@ -43,14 +44,25 @@ export interface FirestoreErrorInfo {
   };
 }
 
-let isFirestoreQuotaExceeded = false;
+let isFirestoreQuotaExceeded = typeof window !== 'undefined' && sessionStorage.getItem('FIRESTORE_QUOTA_EXCEEDED') === 'true';
+
+if (isFirestoreQuotaExceeded) {
+  try {
+    disableNetwork(db).catch(() => {});
+  } catch {}
+}
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const message = error instanceof Error ? error.message : String(error);
   
   if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted') || message.includes('RESOURCE_EXHAUSTED')) {
     isFirestoreQuotaExceeded = true;
-    console.warn('[Firestore] Quota limit reached for free tier. Falling back cleanly to Supabase & local storage cache.');
+    try {
+      sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
+      disableNetwork(db).catch(() => {});
+    } catch {}
+
+    console.warn('[Firestore] Quota limit reached for free tier. Disabled Firestore network and falling back cleanly to Supabase & local storage cache.');
     return {
       error: 'Quota limit exceeded',
       operationType,
@@ -81,12 +93,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Test connection on boot
 export async function testFirestoreConnection(): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return true;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline, using cache.');
+    if (error instanceof Error && (error.message.includes('Quota limit exceeded') || error.message.includes('resource-exhausted'))) {
+      isFirestoreQuotaExceeded = true;
+      try {
+        sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
+        disableNetwork(db).catch(() => {});
+      } catch {}
     }
     return true;
   }
@@ -94,6 +111,7 @@ export async function testFirestoreConnection(): Promise<boolean> {
 
 // Realtime listeners for Arsip
 export function subscribeToArsip(onUpdate: (items: ArsipItem[]) => void) {
+  if (isFirestoreQuotaExceeded) return () => {};
   try {
     const colRef = collection(db, 'arsip');
     return onSnapshot(colRef, (snapshot) => {
@@ -113,6 +131,7 @@ export function subscribeToArsip(onUpdate: (items: ArsipItem[]) => void) {
 
 // Realtime listeners for Master Siswa
 export function subscribeToMasterSiswa(onUpdate: (items: MasterSiswa[]) => void) {
+  if (isFirestoreQuotaExceeded) return () => {};
   try {
     const colRef = collection(db, 'master_siswa');
     return onSnapshot(colRef, (snapshot) => {
@@ -132,6 +151,7 @@ export function subscribeToMasterSiswa(onUpdate: (items: MasterSiswa[]) => void)
 
 // Realtime listeners for Master Guru
 export function subscribeToMasterGuru(onUpdate: (items: MasterGuru[]) => void) {
+  if (isFirestoreQuotaExceeded) return () => {};
   try {
     const colRef = collection(db, 'master_guru');
     return onSnapshot(colRef, (snapshot) => {
