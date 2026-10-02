@@ -45,6 +45,15 @@ function convertDataUriToBlobUrl(dataUrl: string): string {
   }
 }
 
+function getDriveEmbedUrl(link?: string): string {
+  if (!link || !link.startsWith('http')) return '';
+  const match = link.match(/\/d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) {
+    return `https://drive.google.com/file/d/${match[1]}/preview`;
+  }
+  return link;
+}
+
 export default function PreviewModal({ item, onClose, onPrint, onDownload }: PreviewModalProps) {
   const [activeTab, setActiveTab] = useState<'file' | 'certificate'>('file');
   const [fileData, setFileData] = useState<string>('');
@@ -70,14 +79,20 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
       .then((data) => {
         if (data) {
           setFileData(data);
+        } else if (item.linkDrive && item.linkDrive.startsWith('http')) {
+          setFileData(getDriveEmbedUrl(item.linkDrive));
         } else {
           setFileData('');
           setActiveTab('certificate');
         }
       })
       .catch(() => {
-        setFileData('');
-        setActiveTab('certificate');
+        if (item.linkDrive && item.linkDrive.startsWith('http')) {
+          setFileData(getDriveEmbedUrl(item.linkDrive));
+        } else {
+          setFileData('');
+          setActiveTab('certificate');
+        }
       })
       .finally(() => {
         setIsLoadingFile(false);
