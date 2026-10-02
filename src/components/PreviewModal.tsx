@@ -274,18 +274,29 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Berkas <strong>{item.namaFileAsli || item.kategori}</strong> diunggah langsung ke penyimpanan Google Drive Anda. Anda dapat melihat lembar verifikasi digital atau membuka file langsung di Drive.
                 </p>
-                <div className="flex items-center justify-center gap-3 pt-2">
+                <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
+                  {item.linkDrive && item.linkDrive.startsWith('http') && (
+                    <a
+                      href={item.linkDrive}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <span>Buka File di Drive</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                   <button
                     onClick={() => setActiveTab('certificate')}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
-                    Buka Lembar Verifikasi
+                    Lembar Verifikasi
                   </button>
                   <a
                     href={`https://drive.google.com/drive/folders/${folderId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <span>Folder Drive</span>
                     <ExternalLink className="w-3.5 h-3.5" />

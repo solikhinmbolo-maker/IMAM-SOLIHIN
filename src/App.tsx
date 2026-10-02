@@ -1059,27 +1059,6 @@ function doGet(e) {
           </div>
 
           <div className="flex items-center gap-4 sm:gap-5">
-            {/* Live Cloud Sync Indicator (Google Drive & Google Spreadsheet) */}
-            <button
-              onClick={async () => {
-                setCloudSyncStatus(prev => ({ ...prev, isSyncing: true }));
-                const res = await fetchLiveFullDataFromGoogle();
-                const nowTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                setCloudSyncStatus({
-                  isSyncing: false,
-                  lastSync: nowTime,
-                  message: res.success ? `✓ Sinkron (${res.itemsCount} berkas, ${res.siswaCount} siswa)` : `⚠️ ${res.message}`
-                });
-                setDbVersion(v => v + 1);
-              }}
-              disabled={cloudSyncStatus.isSyncing}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-900/80 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Klik untuk menyinkronkan data terbaru dari Google Spreadsheet secara real-time"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${cloudSyncStatus.isSyncing ? 'animate-spin' : ''}`} />
-              <span>{cloudSyncStatus.isSyncing ? 'Menyinkronkan Cloud...' : cloudSyncStatus.lastSync ? `Sinkron (${cloudSyncStatus.lastSync})` : 'Google Cloud Live'}</span>
-            </button>
-
             {/* 30-Min Idle Protection Indicator */}
             <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
