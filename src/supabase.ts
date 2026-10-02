@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { ArsipItem, MasterSiswaItem, MasterGuruItem, getAvatarForUser } from './data/mockDatabase';
+import { ArsipItem, MasterSiswaItem, MasterGuruItem, getAvatarForUser, saveAvatarForUser } from './data/mockDatabase';
 
 export interface SupabaseConfig {
   url: string;
@@ -284,6 +284,26 @@ export async function saveSingleUserToSupabase(
   const userUuid = isUuid(user.id) ? user.id! : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '60f357d6-b7f8-49a8-8ec4-' + Date.now().toString(16).padEnd(12, '0'));
 
   try {
+    // Auto-upload photo profile base64 to Supabase Storage bucket 'arsip' to get public HTTP link for cross-device sync
+    let publicAvatarUrl = user.avatarUrl || '';
+    if (user.avatarUrl && user.avatarUrl.startsWith('data:image')) {
+      try {
+        const uploadRes = await uploadFileToSupabaseStorage(`pp_${cleanEmail}`, `avatar_${cleanEmail}.jpg`, user.avatarUrl);
+        if (uploadRes.success && uploadRes.publicUrl) {
+          publicAvatarUrl = uploadRes.publicUrl;
+        }
+      } catch (e) {
+        console.warn('Avatar storage upload warning:', e);
+      }
+    }
+
+    if (publicAvatarUrl) {
+      saveAvatarForUser(cleanEmail, publicAvatarUrl);
+      if (cleanEmail === 'superadmin' || user.id === 'master-superadmin') {
+        saveAvatarForUser('superadmin', publicAvatarUrl);
+      }
+    }
+
     // 1. Cek apakah baris dengan email lama / email baru sudah ada di Supabase
     let query = client.from('users').select('id, email, nama');
     if (cleanOldEmail && cleanOldEmail !== cleanEmail) {
@@ -303,11 +323,21 @@ export async function saveSingleUserToSupabase(
         password: cleanPassword,
         role: cleanRole
       };
+      if (publicAvatarUrl) {
+        updateData.avatar_url = publicAvatarUrl;
+      }
 
-      const { error: updateErr } = await client
+      let { error: updateErr } = await client
         .from('users')
         .update(updateData)
         .eq('id', existing.id);
+
+      // Jika error karena kolom avatar_url tidak ada di tabel users Supabase, coba tanpa kolom itu
+      if (updateErr && (updateErr.message.includes('avatar_url') || (updateErr as any).code === '42703')) {
+        delete updateData.avatar_url;
+        const retry = await client.from('users').update(updateData).eq('id', existing.id);
+        updateErr = retry.error;
+      }
 
       if (updateErr) {
         console.warn('Supabase update user error:', updateErr.message);
@@ -323,10 +353,20 @@ export async function saveSingleUserToSupabase(
         password: cleanPassword,
         role: cleanRole
       };
+      if (publicAvatarUrl) {
+        insertPayload.avatar_url = publicAvatarUrl;
+      }
 
-      const { error: insertErr } = await client
+      let { error: insertErr } = await client
         .from('users')
         .insert([insertPayload]);
+
+      // Jika error karena kolom avatar_url tidak ada, coba tanpa avatar_url
+      if (insertErr && (insertErr.message.includes('avatar_url') || (insertErr as any).code === '42703')) {
+        delete insertPayload.avatar_url;
+        const retry = await client.from('users').insert([insertPayload]);
+        insertErr = retry.error;
+      }
 
       if (insertErr) {
         console.warn('Supabase insert user notice:', insertErr.message);
