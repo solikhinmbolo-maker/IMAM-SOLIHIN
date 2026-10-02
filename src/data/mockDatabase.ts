@@ -674,9 +674,9 @@ export interface GoogleSyncConfig {
 }
 
 export const DEFAULT_SYNC_CONFIG: GoogleSyncConfig = {
-  webhookUrl: 'https://script.google.com/macros/s/AKfycbziMQOKTcNa2UHYjiKH93piuqggfMUkMbjT9KzyRR2gJHMYq7RtNgEP0jVW9hJH2aoRCQ/exec',
-  folderId: '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x',
-  spreadsheetId: '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE',
+  webhookUrl: 'https://script.google.com/macros/s/AKfycbwU3DV3GiP_H3vmiCgL9xdWZUP4SPYSkntsyVPCOq3RUlivn4JB8F-30ccdC2uWevRo/exec',
+  folderId: '1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ',
+  spreadsheetId: '1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI',
   autoSync: true
 };
 
@@ -687,15 +687,9 @@ export function getStoredSyncConfig(): GoogleSyncConfig {
     const raw = localStorage.getItem(DB_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (!parsed.webhookUrl && DEFAULT_SYNC_CONFIG.webhookUrl) {
-        parsed.webhookUrl = DEFAULT_SYNC_CONFIG.webhookUrl;
-      }
-      if (parsed.folderId === '1M_Ry_o-q7JGeXRfYdlpE8E2AuF_aOE8f' || !parsed.folderId) {
-        parsed.folderId = DEFAULT_SYNC_CONFIG.folderId;
-      }
-      if (parsed.spreadsheetId === '1ew4gfR53zeBdAcf57wWNdOmE9NiZjsvZikXgSxNHwEQ' || !parsed.spreadsheetId) {
-        parsed.spreadsheetId = DEFAULT_SYNC_CONFIG.spreadsheetId;
-      }
+      parsed.webhookUrl = DEFAULT_SYNC_CONFIG.webhookUrl;
+      parsed.folderId = DEFAULT_SYNC_CONFIG.folderId;
+      parsed.spreadsheetId = DEFAULT_SYNC_CONFIG.spreadsheetId;
       return parsed;
     }
   } catch {}

@@ -215,14 +215,23 @@ export default function App() {
 
   const handleCopyGAS = () => {
     const code = `// ================================================================
-// GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM (V3.0 ANTI-DUPLIKAT)
-// Database Terpusat: Google Drive & Google Spreadsheet
+// GOOGLE APPS SCRIPT WEBHOOK E-ARSIP SMP AL-HIKAM (V3.5)
 // ================================================================
 
 // 1. JALANKAN FUNGSI INI SEKALI (KLIK RUN/JALANKAN DI APPS SCRIPT)
-// Berfungsi menyiapkan 6 Tab & Otomatis Membersihkan Baris Duplikat
+// Berfungsi meminta izin Google Drive & Google Spreadsheet, serta menyiapkan 6 Tab
 function setupDatabaseDanIzin() {
-  var ss = getSpreadsheet();
+  // A. Izin Akses Google Drive
+  var rootFolderId = '1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ';
+  try {
+    var f = DriveApp.getFolderById(rootFolderId);
+    Logger.log('Folder Drive Terhubung: ' + f.getName());
+  } catch(e) {
+    Logger.log('Drive permission prompt initialized.');
+  }
+
+  // B. Izin Akses Google Spreadsheet & Buat 6 Tab
+  var ss = getSpreadsheet('1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI');
 
   getOrCreateSheet(ss, 'DATA_MASTER_SISWA', [
     'NISN / NIS', 'NAMA LENGKAP SISWA', 'TAHUN ANGKATAN', 'KELAS', 'TANGGAL TERDAFTAR'
@@ -238,28 +247,26 @@ function setupDatabaseDanIzin() {
     'UKURAN', 'UPLOADER', 'LINK GOOGLE DRIVE'
   ];
 
-  var sAll = getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
-  var sSiswa = getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
-  var sGuru = getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
-  var sLain = getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
-
-  // Bersihkan data duplikat jika pernah ada klik ganda sebelumnya
-  cleanDuplicatesInSheet(sAll);
-  cleanDuplicatesInSheet(sSiswa);
-  cleanDuplicatesInSheet(sGuru);
-  cleanDuplicatesInSheet(sLain);
+  getOrCreateSheet(ss, 'REKAP_SEMUA_ARSIP', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_SISWA', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_GURU', headersArsip);
+  getOrCreateSheet(ss, 'ARSIP_LAINNYA', headersArsip);
 
   SpreadsheetApp.flush();
-  Logger.log('BERHASIL! 6 Tab database siap & bersih dari duplikasi di: ' + ss.getName());
+  Logger.log('BERHASIL! 6 Tab database siap di: ' + ss.getName());
 }
 
-function getSpreadsheet() {
-  var sheetId = '1kaPMSn1vJkE_fUL0pVwQe_C5eVMOV6y1D5Ge_A3pHpE';
+function getSpreadsheet(optId) {
+  if (optId && String(optId).trim().length > 10) {
+    try {
+      return SpreadsheetApp.openById(String(optId).trim());
+    } catch(e) {}
+  }
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (ss && ss.getId()) return ss;
   } catch(e) {}
-  return SpreadsheetApp.openById(sheetId);
+  return SpreadsheetApp.openById('1fyWuUClt970_2RELzMq5jBGsjCcTXYZW_XZtTyxmyI');
 }
 
 // 2. WEBHOOK PENERIMA UPLOAD & SINKRONISASI
@@ -267,8 +274,8 @@ function doPost(e) {
   try {
     var contents = (e && e.postData) ? e.postData.contents : '{}';
     var data = JSON.parse(contents);
-    var ss = getSpreadsheet();
-    var rootFolderId = data.folderId || '1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x';
+    var ss = getSpreadsheet(data.spreadsheetId);
+    var rootFolderId = data.folderId || '1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ';
 
     var headersArsip = [
       'ID ARSIP', 'TANGGAL UPLOAD', 'TAHUN / ANGKATAN', 'IDENTITAS (NISN/NUPTK)', 
@@ -466,7 +473,7 @@ function cleanDuplicatesInSheet(sheet) {
 
 // Helper Folder
 function getOrCreateFolder(parent, name) {
-  if (!parent) parent = DriveApp.getFolderById('1aYz2ZRwFdz0trZDWt8g3_V_wluZx9n3x');
+  if (!parent) parent = DriveApp.getFolderById('1hHk3xY4cwzncVWTyalyC7d9v7WvxdniQ');
   var folders = parent.getFoldersByName(name);
   if (folders.hasNext()) return folders.next();
   return parent.createFolder(name);
@@ -499,7 +506,7 @@ function getOrCreateSheet(ss, name, headers) {
 // 3. AMBIL DATA REAL-TIME DARI GOOGLE SPREADSHEET (DEDUPLIKASI OTOMATIS & MULTI-DEVICE SINKRON)
 function doGet(e) {
   try {
-    var ss = getSpreadsheet();
+    var ss = getSpreadsheet(e && e.parameter ? e.parameter.spreadsheetId : null);
     
     // A. BACA REKAP ARSIP
     var sArsip = ss.getSheetByName('REKAP_SEMUA_ARSIP');
