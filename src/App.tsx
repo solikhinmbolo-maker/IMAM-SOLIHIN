@@ -1044,18 +1044,16 @@ function doGet(e) {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-['Poppins'] text-slate-800 antialiased selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
       
-      {/* 1. MOBILE DRAWER OVERLAY (Glassmorphism Dark Blur - Covers Entire Viewport Header & Bottom Nav) */}
-      <div 
-        onClick={() => {
-          setMobileSidebarOpen(false);
-          setMobileProfileSheetOpen(false);
-        }}
-        className={`fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-md lg:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          (mobileSidebarOpen || mobileProfileSheetOpen)
-            ? 'opacity-100 pointer-events-auto'
-            : 'opacity-0 pointer-events-none'
-        }`}
-      />
+      {/* 1. MOBILE DRAWER OVERLAY (Glassmorphism Dark Blur - Conditionally Rendered to Prevent Edge Bleed) */}
+      {(mobileSidebarOpen || mobileProfileSheetOpen) && (
+        <div 
+          onClick={() => {
+            setMobileSidebarOpen(false);
+            setMobileProfileSheetOpen(false);
+          }}
+          className="fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-md lg:hidden transition-opacity duration-500 ease-in-out animate-fadeIn"
+        />
+      )}
 
       {/* 2. SIDEBAR NAVIGATION (DESKTOP & ACCESSIBLE AS DRAWER) */}
       <aside className={`
@@ -2267,7 +2265,7 @@ function doGet(e) {
                       className="w-16 h-16 object-contain"
                     />
                     <div>
-                      <h4 className="text-base font-bold text-slate-900">E-Arsip Digital SMP Al-Hikam Jombang</h4>
+                      <h4 className="text-base font-bold text-slate-900">E-Arsip Digital SMP Al-Hikam Sendang Mulyo</h4>
                       <p className="text-xs text-slate-600 mt-0.5">Sistem Manajemen Pengarsipan Digital Siswa, Guru & Dokumen Resmi Sekolah</p>
                       <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
                         <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
@@ -2278,10 +2276,11 @@ function doGet(e) {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 space-y-1.5 leading-relaxed">
-                    <p><strong>Penyimpanan Fisik:</strong> Google Drive Cloud Storage (100 GB Terhubung)</p>
-                    <p><strong>Mesin Database:</strong> Google Spreadsheet Engine dengan Integrasi Apps Script</p>
-                    <p><strong>Lisensi:</strong> Hak Cipta Terpelihara © 2026 SMP Al-Hikam Jombang</p>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 space-y-2 leading-relaxed">
+                    <p><strong>Penyimpanan Fisik:</strong> Google Drive Cloud Storage (Terhubung Cloud Resmi)</p>
+                    <p><strong>Mesin Database:</strong> Google Spreadsheet Engine & Firebase Cloud Database Real-time</p>
+                    <p><strong>Keterangan Pendukung:</strong> Aplikasi E-Arsip Digital SMP Al-Hikam Sendang Mulyo dirancang khusus untuk mempermudah tata kelola administrasi sekolah, pengarsipan berkas siswa (Ijazah, SKL, SPMB), pendataan kepegawaian guru/tendik, serta verifikasi dokumen resmi secara digital, aman, dan efisien.</p>
+                    <p><strong>Lisensi:</strong> Hak Cipta Terpelihara © 2026 SMP Al-Hikam Sendang Mulyo</p>
                   </div>
                 </div>
               )}
