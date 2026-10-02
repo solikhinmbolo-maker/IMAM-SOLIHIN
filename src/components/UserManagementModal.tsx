@@ -51,40 +51,20 @@ export function getStoredUserList(): SystemUser[] {
       return INITIAL_SYSTEM_USERS;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Pastikan akun utama Solikhin Mbolo (superadmin) selalu ada dan menjadi master
-      const masterIdx = parsed.findIndex(u => u.id === 'master-superadmin' || u.email?.toLowerCase() === 'superadmin');
-      
-      // Bersihkan duplikasi dan akun demo lama yang sudah tidak dipakai
-      const cleanedOtherUsers = parsed
-        .filter((u, index) => {
-          if (u.id === 'master-superadmin' || u.email?.toLowerCase() === 'superadmin') return false;
-          // Filter akun demo default lama
-          if (['admin@alhicam.sch.id', 'solikhin@alhicam.sch.id', 'nurul@alhicam.sch.id'].includes(u.email?.toLowerCase())) return false;
-          // Filter duplikasi username
-          return parsed.findIndex(item => item.email?.toLowerCase() === u.email?.toLowerCase()) === index;
-        })
-        .map(u => ({ ...u, isSuperAdmin: false }));
-
-      let masterUser: SystemUser;
-      if (masterIdx >= 0) {
-        masterUser = {
-          ...INITIAL_SYSTEM_USERS[0],
-          name: parsed[masterIdx].name || 'Solikhin Mbolo',
-          email: 'superadmin',
-          password: parsed[masterIdx].password || 'superadmin123',
-          avatarUrl: parsed[masterIdx].avatarUrl || INITIAL_SYSTEM_USERS[0].avatarUrl,
-          isSuperAdmin: true
-        };
-      } else {
-        masterUser = INITIAL_SYSTEM_USERS[0];
-      }
-
-      const finalList = [masterUser, ...cleanedOtherUsers];
-      localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(finalList));
-      return finalList;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(INITIAL_SYSTEM_USERS));
+      return INITIAL_SYSTEM_USERS;
     }
-    return INITIAL_SYSTEM_USERS;
+
+    // Pastikan akun utama Solikhin Mbolo selalu ada di list
+    const hasMaster = parsed.some(u => u.id === 'master-superadmin' || (u.email || '').toLowerCase() === 'superadmin');
+    if (!hasMaster) {
+      const merged = [INITIAL_SYSTEM_USERS[0], ...parsed];
+      localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(merged));
+      return merged;
+    }
+
+    return parsed;
   } catch {
     return INITIAL_SYSTEM_USERS;
   }
@@ -93,7 +73,9 @@ export function getStoredUserList(): SystemUser[] {
 export function saveStoredUserList(users: SystemUser[]) {
   try {
     localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(users));
-  } catch {}
+  } catch (err) {
+    console.warn('Failed to save user list:', err);
+  }
 }
 
 interface UserManagementModalProps {

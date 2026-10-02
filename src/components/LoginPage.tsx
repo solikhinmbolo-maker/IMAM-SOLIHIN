@@ -27,7 +27,9 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
     e.preventDefault();
     setErrorMessage('');
 
-    const cleanInput = email.trim().toLowerCase();
+    const rawInput = email.trim();
+    const cleanInput = rawInput.toLowerCase();
+    const strippedInput = cleanInput.replace(/^@/, '');
 
     if (!cleanInput || !password) {
       setErrorMessage('Silakan isi Username dan Password terlebih dahulu.');
@@ -42,10 +44,27 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
     setTimeout(() => {
       setLoading(false);
 
-      // Cari kecocokan akun
+      // Cari kecocokan akun (mendukung berbagai variasi input username)
       const matchedUser = userList.find((u: any) => {
         const uEmail = (u.email || '').trim().toLowerCase();
-        return uEmail === cleanInput || (cleanInput === 'superadmin' && (u.id === 'master-superadmin' || u.isSuperAdmin));
+        const uEmailStripped = uEmail.replace(/^@/, '');
+        const uName = (u.name || '').trim().toLowerCase();
+
+        const matchEmail = (
+          uEmail === cleanInput ||
+          uEmailStripped === strippedInput ||
+          uEmail === strippedInput ||
+          uEmailStripped === cleanInput
+        );
+
+        const matchName = uName === cleanInput || uName === strippedInput;
+
+        const matchSuperAdmin = (
+          (cleanInput === 'superadmin' || strippedInput === 'superadmin') &&
+          (u.id === 'master-superadmin' || u.isSuperAdmin || uEmail === 'superadmin')
+        );
+
+        return matchEmail || matchName || matchSuperAdmin;
       });
 
       // Validasi akun
@@ -55,9 +74,9 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
           return;
         }
 
-        const validPassword = matchedUser.password || 'superadmin123';
+        const validPassword = matchedUser.password || (matchedUser.id === 'master-superadmin' ? 'superadmin123' : '');
 
-        if (password === validPassword) {
+        if (password.trim() === (validPassword || '').trim()) {
           onLoginSuccess({
             email: matchedUser.email,
             name: matchedUser.name,
@@ -72,7 +91,7 @@ export default function LoginPage({ onLoginSuccess, sessionNotice }: LoginPagePr
       }
 
       setErrorMessage('Username tidak terdaftar! Hanya akun resmi yang diizinkan masuk.');
-    }, 400);
+    }, 300);
   };
 
   const handleKirimReset = (e: React.FormEvent) => {
