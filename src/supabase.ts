@@ -201,8 +201,47 @@ export async function saveArsipToSupabase(item: ArsipItem): Promise<boolean> {
 }
 
 /**
- * Delete archive from Supabase permanently
+ * Bulk save / sync all local archives to Supabase
  */
+export async function syncAllArsipToSupabase(items: ArsipItem[]): Promise<{ success: boolean; count: number }> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(items) || items.length === 0) {
+    return { success: false, count: 0 };
+  }
+
+  try {
+    const rows = items.map(item => ({
+      id: item.id,
+      tanggal: item.tanggal || '',
+      tahun: item.tahun || '',
+      identitas: item.identitas || '-',
+      subjek: item.subjek || '',
+      kategori: item.kategori || '',
+      kategori_utama: item.kategoriUtama,
+      nama_file_asli: item.namaFileAsli,
+      ukuran: item.ukuran || '',
+      link_drive: item.linkDrive || '',
+      uploader: item.uploader || 'admin@alhicam.sch.id',
+      is_trash: Boolean(item.isTrash),
+      deleted_at: item.isTrash ? (item.deletedAt || new Date().toISOString()) : null,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await client
+      .from('arsip')
+      .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+      console.error('Supabase bulk sync error:', error);
+      return { success: false, count: 0 };
+    }
+
+    return { success: true, count: rows.length };
+  } catch (err) {
+    console.error('Supabase bulk sync exception:', err);
+    return { success: false, count: 0 };
+  }
+}
 export async function deleteArsipFromSupabase(id: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;

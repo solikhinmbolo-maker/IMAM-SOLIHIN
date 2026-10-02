@@ -77,7 +77,9 @@ import {
   testSupabaseConnection,
   subscribeToSupabaseArsip,
   SUPABASE_SQL_SCHEMA,
-  sanitizeSupabaseUrl
+  sanitizeSupabaseUrl,
+  getSupabaseClient,
+  syncAllArsipToSupabase
 } from './supabase';
 
 type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan' | 'sampah';
@@ -237,6 +239,7 @@ export default function App() {
   const [supabaseConfig, setSupabaseConfig] = useState(() => getStoredSupabaseConfig());
   const [supabaseTestStatus, setSupabaseTestStatus] = useState<string>('');
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [isSyncingToSupabase, setIsSyncingToSupabase] = useState(false);
   const [copiedSqlSchema, setCopiedSqlSchema] = useState(false);
 
   const handleTestSupabaseConnection = async () => {
@@ -254,6 +257,20 @@ export default function App() {
     setIsTestingSupabase(false);
   };
 
+  const handleSyncLocalToSupabase = async () => {
+    setIsSyncingToSupabase(true);
+    setSupabaseTestStatus('Mengunggah seluruh data arsip lokal ke Supabase PostgreSQL...');
+    
+    const localItems = getAllRawArsip();
+    const result = await syncAllArsipToSupabase(localItems);
+    if (result.success) {
+      setSupabaseTestStatus(`✓ Berhasil menyinkronkan ${result.count} data arsip ke Supabase Cloud!`);
+    } else {
+      setSupabaseTestStatus('Gagal menyinkronkan ke Supabase. Pastikan tabel "arsip" sudah dibuat melalui SQL Editor.');
+    }
+    setIsSyncingToSupabase(false);
+  };
+
   const handleSaveSupabaseConfig = (url: string, anonKey: string) => {
     const cleanUrl = sanitizeSupabaseUrl(url);
     const updated = { ...supabaseConfig, url: cleanUrl, anonKey };
@@ -268,6 +285,11 @@ export default function App() {
     const unsubArsip = subscribeToArsip((remoteItems) => {
       try {
         if (!Array.isArray(remoteItems)) return;
+        // If Supabase client is active, Supabase is the primary database
+        if (getSupabaseClient()) {
+          console.log('[Sync] Supabase is active, ignoring legacy Firebase snapshot update.');
+          return;
+        }
 
         // Preserve local file attachment blobs if available
         const localRaw = getAllRawArsip();
@@ -1884,15 +1906,27 @@ function doGet(e) {
 
                     {/* Action Buttons for Supabase */}
                     <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
-                      <button
-                        type="button"
-                        onClick={handleTestSupabaseConnection}
-                        disabled={isTestingSupabase}
-                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
-                        <span>{isTestingSupabase ? 'Menguji...' : '⚡ Uji Koneksi Supabase'}</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestSupabaseConnection}
+                          disabled={isTestingSupabase}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
+                          <span>{isTestingSupabase ? 'Menguji...' : '⚡ Uji Koneksi Supabase'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSyncLocalToSupabase}
+                          disabled={isSyncingToSupabase}
+                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingToSupabase ? 'animate-spin' : ''}`} />
+                          <span>{isSyncingToSupabase ? 'Menyinkronkan...' : '📤 Sync Data Ke Supabase'}</span>
+                        </button>
+                      </div>
 
                       <button
                         type="button"
