@@ -58,13 +58,7 @@ if (isFirestoreQuotaExceeded) {
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const message = error instanceof Error ? error.message : String(error);
   
-  if (
-    message.includes('Quota') || 
-    message.includes('quota') || 
-    message.includes('resource-exhausted') || 
-    message.includes('RESOURCE_EXHAUSTED') || 
-    message.includes('Quota limit exceeded')
-  ) {
+  if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted') || message.includes('RESOURCE_EXHAUSTED')) {
     isFirestoreQuotaExceeded = true;
     try {
       sessionStorage.setItem('FIRESTORE_QUOTA_EXCEEDED', 'true');
@@ -72,6 +66,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       disableNetwork(db).catch(() => {});
     } catch {}
 
+    console.warn('[Firestore] Quota limit reached for free tier. Disabled Firestore network and falling back cleanly to Supabase & local storage cache.');
     return {
       error: 'Quota limit exceeded',
       operationType,
@@ -96,6 +91,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
+  console.warn('Firestore Error Notice: ', message);
   return errInfo;
 }
 
@@ -238,6 +234,18 @@ export async function saveSiswaToFirestore(siswa: MasterSiswa): Promise<boolean>
   }
 }
 
+// Delete Master Siswa from Firestore
+export async function deleteSiswaFromFirestore(id: string): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
+  try {
+    await deleteDoc(doc(db, 'master_siswa', id));
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `master_siswa/${id}`);
+    return false;
+  }
+}
+
 // Save Master Guru to Firestore
 export async function saveGuruToFirestore(guru: MasterGuru): Promise<boolean> {
   if (isFirestoreQuotaExceeded) return false;
@@ -247,6 +255,18 @@ export async function saveGuruToFirestore(guru: MasterGuru): Promise<boolean> {
     return true;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `master_guru/${guru.id || guru.nuptk}`);
+    return false;
+  }
+}
+
+// Delete Master Guru from Firestore
+export async function deleteGuruFromFirestore(id: string): Promise<boolean> {
+  if (isFirestoreQuotaExceeded) return false;
+  try {
+    await deleteDoc(doc(db, 'master_guru', id));
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `master_guru/${id}`);
     return false;
   }
 }

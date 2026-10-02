@@ -156,12 +156,14 @@ export default function BukuIndukView({ onNavigateToArsip }: BukuIndukViewProps)
     setShowAddModal(true);
   };
 
-  const handleDelete = (id: string, nama: string) => {
+  const handleDelete = async (id: string, nama: string) => {
     if (confirm(`Yakin ingin menghapus data ${nama} dari buku induk?`)) {
       if (activeTab === 'siswa') {
-        setSiswaList(deleteMasterSiswa(id));
+        const updated = await deleteMasterSiswa(id);
+        setSiswaList(updated);
       } else {
-        setGuruList(deleteMasterGuru(id));
+        const updated = await deleteMasterGuru(id);
+        setGuruList(updated);
       }
     }
   };

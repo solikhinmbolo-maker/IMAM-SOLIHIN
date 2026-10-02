@@ -607,6 +607,34 @@ export async function saveGuruToSupabase(item: MasterGuruItem): Promise<boolean>
 }
 
 /**
+ * Delete single Siswa from Supabase
+ */
+export async function deleteMasterSiswaFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { error } = await client.from('master_siswa').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete single Guru from Supabase
+ */
+export async function deleteMasterGuruFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { error } = await client.from('master_guru').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Bulk sync all Siswa to Supabase
  */
 export async function syncAllMasterSiswaToSupabase(items: MasterSiswaItem[]): Promise<{ success: boolean; count: number; error?: string }> {

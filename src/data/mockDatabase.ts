@@ -2,13 +2,17 @@ import {
   saveArsipToFirestore, 
   deleteArsipFromFirestore, 
   saveSiswaToFirestore, 
-  saveGuruToFirestore 
+  saveGuruToFirestore,
+  deleteSiswaFromFirestore,
+  deleteGuruFromFirestore
 } from '../firebase';
 import {
   saveArsipToSupabase,
   deleteArsipFromSupabase,
   saveSiswaToSupabase,
-  saveGuruToSupabase
+  saveGuruToSupabase,
+  deleteMasterSiswaFromSupabase,
+  deleteMasterGuruFromSupabase
 } from '../supabase';
 
 export interface MasterSiswaItem {
@@ -660,12 +664,14 @@ export function saveMasterSiswa(item: MasterSiswaItem): MasterSiswaItem[] {
   return updated;
 }
 
-export function deleteMasterSiswa(id: string): MasterSiswaItem[] {
+export async function deleteMasterSiswa(id: string): Promise<MasterSiswaItem[]> {
   const current = getStoredMasterSiswa();
   const target = current.find(s => s.id === id);
   const updated = current.filter(s => s.id !== id);
   safeSetItem(DB_KEYS.MASTER_SISWA, JSON.stringify(updated));
   if (target) {
+    await deleteSiswaFromFirestore(target.id).catch(() => {});
+    await deleteMasterSiswaFromSupabase(target.id).catch(() => {});
     addAuditLog({
       aksi: 'DELETE',
       kategori: 'Buku Induk Siswa',
@@ -674,6 +680,9 @@ export function deleteMasterSiswa(id: string): MasterSiswaItem[] {
       operator: 'admin@alhicam.sch.id',
       status: 'WARNING'
     });
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
   }
   return updated;
 }
@@ -709,12 +718,14 @@ export function saveMasterGuru(item: MasterGuruItem): MasterGuruItem[] {
   return updated;
 }
 
-export function deleteMasterGuru(id: string): MasterGuruItem[] {
+export async function deleteMasterGuru(id: string): Promise<MasterGuruItem[]> {
   const current = getStoredMasterGuru();
   const target = current.find(g => g.id === id);
   const updated = current.filter(g => g.id !== id);
   safeSetItem(DB_KEYS.MASTER_GURU, JSON.stringify(updated));
   if (target) {
+    await deleteGuruFromFirestore(target.id).catch(() => {});
+    await deleteMasterGuruFromSupabase(target.id).catch(() => {});
     addAuditLog({
       aksi: 'DELETE',
       kategori: 'Direktori Pendidik',
@@ -723,6 +734,9 @@ export function deleteMasterGuru(id: string): MasterGuruItem[] {
       operator: 'admin@alhicam.sch.id',
       status: 'WARNING'
     });
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
   }
   return updated;
 }
