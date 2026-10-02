@@ -40,7 +40,8 @@ import {
   syncItemToGoogleCloud,
   saveMasterSiswa,
   saveMasterGuru,
-  saveFileAttachment
+  saveFileAttachment,
+  compressImageDataUrl
 } from '../data/mockDatabase';
 
 interface FormUploadViewProps {
@@ -284,6 +285,9 @@ export default function FormUploadView({
     const newId = replaceExistingId || `${prefix}-${randomNum}`;
     const todayStr = new Date().toLocaleDateString('id-ID');
 
+    // Compress base64 if it's an image so it easily syncs across all devices via Firestore
+    const optimizedBase64 = fileBase64 ? await compressImageDataUrl(fileBase64) : '';
+
     const updatedArsip: ArsipItem = {
       id: newId,
       tanggal: todayStr,
@@ -296,14 +300,14 @@ export default function FormUploadView({
       ukuran: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
       linkDrive: `https://drive.google.com/file/d/${newId}/view`,
       uploader: 'admin@alhicam.sch.id',
-      fileDataUrl: fileBase64
+      fileDataUrl: optimizedBase64
     };
 
     setProgressPercent(60);
     setProgressStatus('Menyimpan dokumen & menyinkronkan ke Cloud Database...');
 
     try {
-      const res = await syncItemToGoogleCloud(updatedArsip, fileBase64);
+      const res = await syncItemToGoogleCloud(updatedArsip, optimizedBase64);
       if (res.success && res.driveUrl) {
         updatedArsip.linkDrive = res.driveUrl;
       }
@@ -311,8 +315,8 @@ export default function FormUploadView({
       console.warn('Sync warning:', e);
     }
 
-    if (fileBase64) {
-      await saveFileAttachment(newId, fileBase64);
+    if (optimizedBase64) {
+      await saveFileAttachment(newId, optimizedBase64);
     }
 
     if (replaceExistingId) {

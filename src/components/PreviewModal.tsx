@@ -13,7 +13,7 @@ import {
   Maximize2,
   Upload
 } from 'lucide-react';
-import { ArsipItem, getFileAttachment, saveFileAttachment, replaceArsipItem, getStoredSyncConfig } from '../data/mockDatabase';
+import { ArsipItem, getFileAttachment, saveFileAttachment, replaceArsipItem, getStoredSyncConfig, compressImageDataUrl } from '../data/mockDatabase';
 
 interface PreviewModalProps {
   item: ArsipItem | null;
@@ -230,12 +230,13 @@ export default function PreviewModal({ item, onClose, onPrint, onDownload }: Pre
 
     setIsLoadingFile(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const base64 = evt.target?.result as string;
-      if (base64) {
-        setFileData(base64);
-        saveFileAttachment(item.id, base64);
-        const updatedItem = { ...item, fileDataUrl: base64, namaFileAsli: file.name };
+    reader.onload = async (evt) => {
+      const rawBase64 = evt.target?.result as string;
+      if (rawBase64) {
+        const optimizedBase64 = await compressImageDataUrl(rawBase64);
+        setFileData(optimizedBase64);
+        saveFileAttachment(item.id, optimizedBase64);
+        const updatedItem = { ...item, fileDataUrl: optimizedBase64, namaFileAsli: file.name };
         replaceArsipItem(item.id, updatedItem);
       }
       setIsLoadingFile(false);

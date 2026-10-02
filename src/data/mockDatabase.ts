@@ -33,6 +33,8 @@ export interface ArsipItem {
   linkDrive?: string;
   uploader: string;
   fileDataUrl?: string;
+  isTrash?: boolean;
+  deletedAt?: string;
 }
 
 export const INITIAL_MASTER_SISWA: MasterSiswaItem[] = [
@@ -121,6 +123,53 @@ const fileBlobCache = new Map<string, string>();
 const IDB_NAME = 'EARSIP_ATTACHMENTS_DB';
 const IDB_STORE = 'file_attachments';
 const IDB_VERSION = 1;
+
+/**
+ * Compress images on an in-memory Canvas so base64 easily fits in Firestore (<800KB)
+ * and syncs smoothly across all devices (Mobile, PC, Tablet)
+ */
+export async function compressImageDataUrl(dataUrl: string, maxWidth = 1200, quality = 0.75): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+  if (dataUrl.length < 250000) return dataUrl; // Already small enough
+
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
 
 function openIDB(): Promise<IDBDatabase | null> {
   if (typeof window === 'undefined' || !window.indexedDB) {
@@ -268,7 +317,7 @@ function safeSetItem(key: string, value: string) {
   }
 }
 
-export function getStoredArsip(): ArsipItem[] {
+export function getAllRawArsip(): ArsipItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
     if (!raw) {
@@ -285,6 +334,14 @@ export function getStoredArsip(): ArsipItem[] {
   } catch {
     return [];
   }
+}
+
+export function getStoredArsip(): ArsipItem[] {
+  return getAllRawArsip().filter(item => !item.isTrash);
+}
+
+export function getTrashArsip(): ArsipItem[] {
+  return getAllRawArsip().filter(item => item.isTrash === true);
 }
 
 export function saveArsipItem(item: ArsipItem): ArsipItem[] {
@@ -406,17 +463,103 @@ export function replaceArsipItem(existingId: string, newItem: ArsipItem): ArsipI
   return current.map(item => item.id === existingId ? newItem : item);
 }
 
-export function deleteArsipItem(id: string): ArsipItem[] {
-  const current = getStoredArsip();
-  const updatedClean = current.filter(item => item.id !== id).map(c => {
-    const copy = { ...c };
-    delete copy.fileDataUrl;
-    return copy;
+/**
+ * Move document to Trash (Soft Delete)
+ */
+export function moveToTrashArsipItem(id: string): ArsipItem[] {
+  const all = getAllRawArsip();
+  const updated = all.map(item => {
+    if (item.id === id) {
+      const trashedItem: ArsipItem = {
+        ...item,
+        isTrash: true,
+        deletedAt: new Date().toISOString()
+      };
+      saveArsipToFirestore(trashedItem).catch(() => {});
+      return trashedItem;
+    }
+    return item;
   });
-  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updatedClean));
+
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updated));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+  }
+  return updated.filter(i => !i.isTrash);
+}
+
+/**
+ * Restore document from Trash back to active archives
+ */
+export function restoreFromTrashArsipItem(id: string): ArsipItem[] {
+  const all = getAllRawArsip();
+  const updated = all.map(item => {
+    if (item.id === id) {
+      const restoredItem: ArsipItem = {
+        ...item,
+        isTrash: false,
+        deletedAt: undefined
+      };
+      saveArsipToFirestore(restoredItem).catch(() => {});
+      return restoredItem;
+    }
+    return item;
+  });
+
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(updated));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+  }
+  return updated.filter(i => i.isTrash === true);
+}
+
+/**
+ * Permanently delete document from Firestore, local storage, and IndexedDB
+ */
+export function deletePermanentlyArsipItem(id: string): ArsipItem[] {
+  const all = getAllRawArsip();
+  const remaining = all.filter(item => item.id !== id);
+
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(remaining));
   fileBlobCache.delete(id);
+  try {
+    localStorage.removeItem(`file_blob_${id}`);
+  } catch {}
+
   deleteArsipFromFirestore(id).catch(() => {});
-  return current.filter(item => item.id !== id);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+  }
+  return remaining.filter(i => i.isTrash === true);
+}
+
+/**
+ * Empty all items in Trash permanently
+ */
+export function emptyTrashArsip(): ArsipItem[] {
+  const all = getAllRawArsip();
+  const trashed = all.filter(i => i.isTrash === true);
+  const activeOnly = all.filter(i => !i.isTrash);
+
+  trashed.forEach(t => {
+    fileBlobCache.delete(t.id);
+    try {
+      localStorage.removeItem(`file_blob_${t.id}`);
+    } catch {}
+    deleteArsipFromFirestore(t.id).catch(() => {});
+  });
+
+  safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(activeOnly));
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('earsip:cloud-synced'));
+  }
+  return [];
+}
+
+export function deleteArsipItem(id: string): ArsipItem[] {
+  return moveToTrashArsipItem(id);
 }
 
 // =====================================================================

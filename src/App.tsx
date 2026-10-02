@@ -46,6 +46,7 @@ import BukuIndukView from './components/BukuIndukView';
 import LegalisirView from './components/LegalisirView';
 import AuditLogView from './components/AuditLogView';
 import LaporanView from './components/LaporanView';
+import TongSampahView from './components/TongSampahView';
 import PreviewModal from './components/PreviewModal';
 import { 
   ArsipItem, 
@@ -56,17 +57,21 @@ import {
   clearAllArsipData,
   restoreSampleArsipData,
   getStoredArsip,
+  getTrashArsip,
   syncItemToGoogleCloud,
-  fetchLiveFullDataFromGoogle
+  fetchLiveFullDataFromGoogle,
+  saveFileAttachment,
+  getFileAttachment
 } from './data/mockDatabase';
 import { 
   subscribeToArsip, 
   subscribeToMasterSiswa, 
   subscribeToMasterGuru, 
-  testFirestoreConnection 
+  testFirestoreConnection,
+  saveArsipToFirestore
 } from './firebase';
 
-type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan';
+type ActivePage = 'dashboard' | 'upload' | 'unduh' | 'rekap' | 'buku-induk' | 'legalisir' | 'audit-log' | 'laporan' | 'sampah';
 type SubKategori = 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
 
 // Isolated live clock component so ticking every second doesn't re-render entire page/charts
@@ -232,9 +237,21 @@ export default function App() {
         if (Array.isArray(remoteItems)) {
           remoteItems.forEach(it => {
             const existing = mergedMap.get(it.id);
+            const activeBlob = it.fileDataUrl || existing?.fileDataUrl;
+            
+            // Cache locally on this device if present
+            if (activeBlob) {
+              saveFileAttachment(it.id, activeBlob);
+            }
+
+            // Auto-heal: If local device HAS a file attachment, but cloud Firestore lacks it, push to Firestore
+            if (!it.fileDataUrl && existing?.fileDataUrl) {
+              saveArsipToFirestore({ ...it, fileDataUrl: existing.fileDataUrl }).catch(() => {});
+            }
+
             mergedMap.set(it.id, {
               ...it,
-              fileDataUrl: it.fileDataUrl || existing?.fileDataUrl
+              fileDataUrl: activeBlob
             });
           });
         }
@@ -774,7 +791,8 @@ function doGet(e) {
     'buku-induk': 'Buku Induk Digital (Siswa & Guru)',
     legalisir: 'Verifikasi & Legalisir Digital',
     'audit-log': 'Log & Jejak Audit Pengarsipan',
-    laporan: 'Statistik & Laporan Arsip'
+    laporan: 'Statistik & Laporan Arsip',
+    sampah: 'Sampah & Pemulihan Berkas'
   };
 
   return (
@@ -1000,6 +1018,29 @@ function doGet(e) {
             <span>Statistik & Laporan</span>
           </button>
 
+          {/* Sampah / Trash */}
+          <button
+            onClick={() => {
+              setActivePage('sampah');
+              setMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+              activePage === 'sampah'
+                ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Trash2 className="w-4 h-4" />
+              <span>Sampah</span>
+            </div>
+            {getTrashArsip().length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-red-500/30 text-red-300 border border-red-500/40 text-[10px] font-bold">
+                {getTrashArsip().length}
+              </span>
+            )}
+          </button>
+
           {/* Manajemen User */}
           <button
             onClick={() => {
@@ -1219,6 +1260,10 @@ function doGet(e) {
             <LaporanView
               onPreview={(item) => setPreviewItem(item)}
             />
+          )}
+
+          {activePage === 'sampah' && (
+            <TongSampahView />
           )}
         </div>
       </main>
@@ -1840,14 +1885,29 @@ function doGet(e) {
         onPrint={(item) => {
           window.print();
         }}
-        onDownload={(item) => {
-          const element = document.createElement('a');
-          const fileContent = item.fileDataUrl || `data:text/plain;charset=utf-8,Dokumen E-Arsip Al-Hicam\nNama: ${item.subjek}\nKategori: ${item.kategori}\nTahun: ${item.tahun}\nID: ${item.id}`;
-          element.setAttribute('href', fileContent);
-          element.setAttribute('download', item.namaFileAsli || `${item.subjek}_${item.kategori}.txt`);
-          document.body.appendChild(element);
-          element.click();
-          document.body.removeChild(element);
+        onDownload={async (item) => {
+          // 1. If Google Drive link exists, open/download original full-res file from Google Drive
+          if (item.linkDrive && item.linkDrive.startsWith('http') && !item.linkDrive.includes('SSW-') && !item.linkDrive.includes('GRU-') && !item.linkDrive.includes('LYN-')) {
+            window.open(item.linkDrive, '_blank');
+            return;
+          }
+
+          // 2. Fetch full resolution file blob from IndexedDB / Memory
+          const fullResBlob = item.fileDataUrl || (await getFileAttachment(item.id));
+          if (fullResBlob) {
+            const element = document.createElement('a');
+            element.setAttribute('href', fullResBlob);
+            element.setAttribute('download', item.namaFileAsli || `${item.subjek}_${item.kategori}`);
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            return;
+          }
+
+          // 3. Fallback: Open folder Drive
+          if (item.linkDrive) {
+            window.open(item.linkDrive, '_blank');
+          }
         }}
       />
 

@@ -11,6 +11,8 @@ export interface ArsipItem {
   linkDrive?: string;
   uploader: string;
   fileDataUrl?: string;
+  isTrash?: boolean;
+  deletedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }

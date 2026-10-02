@@ -12,10 +12,10 @@ import {
   FileText,
   User,
   ChevronDown,
-  RefreshCw,
-  ExternalLink
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
-import { ArsipItem, getStoredArsip, fetchLiveArsipFromGoogle, syncAllArsipToGoogleSheet } from '../data/mockDatabase';
+import { ArsipItem, getStoredArsip, moveToTrashArsipItem } from '../data/mockDatabase';
 
 interface FormUnduhViewProps {
   kategoriMenu?: 'Arsip Siswa' | 'Arsip Guru' | 'Arsip Lainnya';
@@ -35,10 +35,16 @@ export default function FormUnduhView({
   const [isSyncingFromGoogle, setIsSyncingFromGoogle] = useState(false);
   const [isPushingToGoogle, setIsPushingToGoogle] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
+  const [trashConfirmItem, setTrashConfirmItem] = useState<ArsipItem | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
 
+  const handleMoveToTrash = (item: ArsipItem) => {
+    moveToTrashArsipItem(item.id);
+    setTrashConfirmItem(null);
+  };
+
   useEffect(() => {
-    const handleCloudUpdate = () => setDataVersion(v => v + 1);
+    const handleCloudUpdate = () => setDataVersion((v: number) => v + 1);
     window.addEventListener('earsip:cloud-synced', handleCloudUpdate);
     return () => window.removeEventListener('earsip:cloud-synced', handleCloudUpdate);
   }, []);
@@ -146,59 +152,12 @@ export default function FormUnduhView({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={async () => {
-              setIsPushingToGoogle(true);
-              setSyncStatus('Sedang menulis berkas ke tabel Google Spreadsheet...');
-              const res = await syncAllArsipToGoogleSheet();
-              setIsPushingToGoogle(false);
-              setSyncStatus(res.success ? `✓ ${res.message}` : `⚠️ ${res.message}`);
-              setTimeout(() => setSyncStatus(''), 5000);
-            }}
-            disabled={isPushingToGoogle}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 text-xs font-semibold cursor-pointer active:scale-95 transition-all"
-            title="Kirim dan catat semua berkas yang ada di aplikasi ke Google Spreadsheet"
-          >
-            <ExternalLink className={`w-3.5 h-3.5 ${isPushingToGoogle ? 'animate-spin text-purple-600' : ''}`} />
-            <span>{isPushingToGoogle ? 'Mencatat...' : 'Catat ke Spreadsheet'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={async () => {
-              setIsSyncingFromGoogle(true);
-              setSyncStatus('Memperbarui dari Google Sheet...');
-              const res = await fetchLiveArsipFromGoogle();
-              setIsSyncingFromGoogle(false);
-              if (res.success) {
-                setSyncStatus(`✓ Berhasil disinkronkan (${res.items?.length || 0} berkas)`);
-                setTimeout(() => setSyncStatus(''), 4000);
-              } else {
-                setSyncStatus(`Info: ${res.message}`);
-                setTimeout(() => setSyncStatus(''), 4000);
-              }
-            }}
-            disabled={isSyncingFromGoogle}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold cursor-pointer active:scale-95 transition-all"
-            title="Ambil data terbaru langsung dari Google Spreadsheet"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFromGoogle ? 'animate-spin text-emerald-600' : ''}`} />
-            <span>{isSyncingFromGoogle ? 'Memperbarui...' : 'Sinkronkan dari Google Sheet'}</span>
-          </button>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Mode Unduh Langsung</span>
+            <span>Terhubung Firebase Cloud</span>
           </div>
         </div>
       </div>
-
-      {syncStatus && (
-        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-medium animate-fadeIn">
-          {syncStatus}
-        </div>
-      )}
 
       {/* FILTER BERTINGKAT & SMART SEARCH */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-3.5 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-5">
@@ -309,11 +268,11 @@ export default function FormUnduhView({
               </div>
 
               {/* Action Buttons on Mobile Card */}
-              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-200">
+              <div className="grid grid-cols-4 gap-1 pt-2 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => onPreview(item)}
-                  className="py-1.5 px-2 bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                  className="py-1.5 px-1 bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>Preview</span>
@@ -321,7 +280,7 @@ export default function FormUnduhView({
                 <button
                   type="button"
                   onClick={() => handlePrint(item)}
-                  className="py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                  className="py-1.5 px-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Cetak</span>
@@ -329,10 +288,19 @@ export default function FormUnduhView({
                 <button
                   type="button"
                   onClick={() => handleDownload(item)}
-                  className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                  className="py-1.5 px-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Unduh</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrashConfirmItem(item)}
+                  className="py-1.5 px-1 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 shadow-sm"
+                  title="Pindahkan ke Tong Sampah"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Hapus</span>
                 </button>
               </div>
             </div>
@@ -415,6 +383,16 @@ export default function FormUnduhView({
                         <Download className="w-3.5 h-3.5" />
                         <span>Unduh</span>
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTrashConfirmItem(item)}
+                        className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer flex items-center gap-1"
+                        title="Pindahkan ke Sampah"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus</span>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -423,6 +401,37 @@ export default function FormUnduhView({
           </tbody>
         </table>
       </div>
+
+      {/* MODAL KONFIRMASI PEMINDAHAN KE SAMPAH */}
+      {trashConfirmItem && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn font-['Poppins']">
+          <div className="bg-[#0F172A] border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-scaleUp text-white">
+            <div className="w-14 h-14 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <h3 className="text-base sm:text-lg font-bold mb-1">Pindahkan ke Sampah?</h3>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              Dokumen <strong className="text-red-400">"{trashConfirmItem.subjek}"</strong> akan dipindahkan ke folder Sampah. Anda masih dapat memulihkannya kapan saja.
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setTrashConfirmItem(null)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMoveToTrash(trashConfirmItem)}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Hapus ke Sampah
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
