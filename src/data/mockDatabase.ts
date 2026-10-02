@@ -93,151 +93,7 @@ export const KATEGORI_LAINNYA = [
   'Berkas Umum'
 ];
 
-export const INITIAL_ARSIP: ArsipItem[] = [
-  {
-    id: 'SSW-0001',
-    tanggal: '28/09/2026',
-    tahun: '2024',
-    identitas: '0071829301',
-    subjek: 'Andika Pratama',
-    kategori: 'Ijazah SMP',
-    kategoriUtama: 'Arsip Siswa',
-    namaFileAsli: 'Ijazah_SMP_Andika_Pratama.pdf',
-    ukuran: '1.8 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-ijazah-andika/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'SSW-0002',
-    tanggal: '28/09/2026',
-    tahun: '2024',
-    identitas: '0071829301',
-    subjek: 'Andika Pratama',
-    kategori: 'SKL SMP',
-    kategoriUtama: 'Arsip Siswa',
-    namaFileAsli: 'SKL_Andika_Pratama.pdf',
-    ukuran: '1.2 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-skl-andika/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'SSW-0003',
-    tanggal: '27/09/2026',
-    tahun: '2024',
-    identitas: '0071829302',
-    subjek: 'Ahmad Fauzi',
-    kategori: 'Ijazah SD/MI',
-    kategoriUtama: 'Arsip Siswa',
-    namaFileAsli: 'Ijazah_SD_Ahmad_Fauzi.pdf',
-    ukuran: '2.1 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-ijazah-fauzi/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'SSW-0004',
-    tanggal: '26/09/2026',
-    tahun: '2023',
-    identitas: '0062819203',
-    subjek: 'Budi Santoso',
-    kategori: 'Pakta Integritas',
-    kategoriUtama: 'Arsip Siswa',
-    namaFileAsli: 'Pakta_Integritas_Budi.pdf',
-    ukuran: '850 KB',
-    linkDrive: 'https://drive.google.com/file/d/demo-pakta-budi/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'SSW-0005',
-    tanggal: '25/09/2026',
-    tahun: '2024',
-    identitas: '0071829304',
-    subjek: 'Citra Dewi Permata',
-    kategori: 'Berkas SPMB',
-    kategoriUtama: 'Arsip Siswa',
-    namaFileAsli: 'SPMB_Citra_Dewi.pdf',
-    ukuran: '3.4 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-spmb-citra/view',
-    uploader: 'solikhin@alhicam.sch.id'
-  },
-  {
-    id: 'GRU-0001',
-    tanggal: '27/09/2026',
-    tahun: '2024',
-    identitas: '197405121999031001',
-    subjek: 'Drs. H. Solikhin, M.Pd',
-    kategori: 'Sertifikat Pendidik (Serdik)',
-    kategoriUtama: 'Arsip Guru',
-    namaFileAsli: 'Serdik_Drs_H_Solikhin_MPd.pdf',
-    ukuran: '2.4 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-serdik-solikhin/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'GRU-0002',
-    tanggal: '26/09/2026',
-    tahun: '2024',
-    identitas: '197405121999031001',
-    subjek: 'Drs. H. Solikhin, M.Pd',
-    kategori: 'Ijazah S2',
-    kategoriUtama: 'Arsip Guru',
-    namaFileAsli: 'Ijazah_S2_Solikhin.pdf',
-    ukuran: '1.9 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-s2-solikhin/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'GRU-0003',
-    tanggal: '25/09/2026',
-    tahun: '2023',
-    identitas: '198208152006042015',
-    subjek: 'Siti Aminah, S.Pd',
-    kategori: 'KTP Guru',
-    kategoriUtama: 'Arsip Guru',
-    namaFileAsli: 'KTP_Siti_Aminah.jpg',
-    ukuran: '620 KB',
-    linkDrive: 'https://drive.google.com/file/d/demo-ktp-siti/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'GRU-0004',
-    tanggal: '24/09/2026',
-    tahun: '2023',
-    identitas: '198903142015051002',
-    subjek: 'Nurul Hidayah, S.Kom',
-    kategori: 'Kartu Keluarga (KK)',
-    kategoriUtama: 'Arsip Guru',
-    namaFileAsli: 'KK_Nurul_Hidayah.pdf',
-    ukuran: '1.1 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-kk-nurul/view',
-    uploader: 'solikhin@alhicam.sch.id'
-  },
-  {
-    id: 'LYN-0001',
-    tanggal: '28/09/2026',
-    tahun: '2026',
-    identitas: '045/SMP-AH/IX/2026',
-    subjek: 'Dinas Pendidikan Kab. Jombang',
-    kategori: 'Surat Masuk',
-    kategoriUtama: 'Arsip Lainnya',
-    namaFileAsli: 'Surat_Edaran_Asesmen_Nasional_2026.pdf',
-    ukuran: '940 KB',
-    linkDrive: 'https://drive.google.com/file/d/demo-surat-masuk/view',
-    uploader: 'admin@alhicam.sch.id'
-  },
-  {
-    id: 'LYN-0002',
-    tanggal: '22/09/2026',
-    tahun: '2026',
-    identitas: '012/SMP-AH/BOS/2026',
-    subjek: 'LPJ Bantuan Operasional Sekolah (BOS) Tahap 1',
-    kategori: 'Proposal atau LPJ',
-    kategoriUtama: 'Arsip Lainnya',
-    namaFileAsli: 'LPJ_Dana_BOS_Tahap_1_2026.pdf',
-    ukuran: '4.8 MB',
-    linkDrive: 'https://drive.google.com/file/d/demo-lpj-bos/view',
-    uploader: 'admin@alhicam.sch.id'
-  }
-];
+export const INITIAL_ARSIP: ArsipItem[] = [];
 
 // =====================================================================
 // PERSISTENCE ENGINE: LocalStorage (Metadata) + IndexedDB / Memory (Blobs)
@@ -407,9 +263,8 @@ function safeSetItem(key: string, value: string) {
 export function getStoredArsip(): ArsipItem[] {
   try {
     const raw = localStorage.getItem(DB_KEYS.ARSIP_ITEMS);
-    if (raw === null) {
-      safeSetItem(DB_KEYS.ARSIP_ITEMS, JSON.stringify(INITIAL_ARSIP));
-      return INITIAL_ARSIP;
+    if (!raw) {
+      return [];
     }
     const items: ArsipItem[] = JSON.parse(raw);
     // Enrich with fileDataUrl from memory cache if available

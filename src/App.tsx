@@ -1086,6 +1086,25 @@ function doGet(e) {
 
         {/* View Contents with top padding for fixed header in mobile */}
         <div className="p-3.5 sm:p-8 pt-[82px] lg:pt-8 flex-1 w-full max-w-full overflow-x-hidden">
+          {/* Cloud Connection Setup Banner (if not yet connected on this device/profile) */}
+          {!syncConfig.webhookUrl && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 rounded-r-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div>
+                  <p className="text-xs sm:text-sm font-bold text-amber-900">Perangkat / Akun Google Ini Belum Terhubung ke Server Google Spreadsheet</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">Masukkan URL Webhook di Pengaturan Sistem agar data di akun/browser ini 100% tersambung ke server yang sama.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettingModal(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer flex-shrink-0"
+              >
+                Hubungkan Server
+              </button>
+            </div>
+          )}
+
           {activePage === 'dashboard' && (
             <DashboardView
               key={dbVersion}
