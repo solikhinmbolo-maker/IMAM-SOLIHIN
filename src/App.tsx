@@ -68,7 +68,9 @@ import {
   GOOGLE_APPS_SCRIPT_ROBUST_CODE,
   testGoogleWebhook,
   getStoredMasterSiswa,
-  getStoredMasterGuru
+  getStoredMasterGuru,
+  getAvatarForUser,
+  saveAvatarForUser
 } from './data/mockDatabase';
 import { 
   subscribeToArsip, 
@@ -144,13 +146,7 @@ export default function App() {
         const timeDiff = Date.now() - parseInt(lastActive, 10);
         if (timeDiff < INACTIVITY_TIMEOUT_MS) {
           const parsed = JSON.parse(saved);
-          const adminAccRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
-          if (adminAccRaw) {
-            try {
-              const acc = JSON.parse(adminAccRaw);
-              if (acc.avatarUrl) parsed.avatarUrl = acc.avatarUrl;
-            } catch {}
-          }
+          parsed.avatarUrl = getAvatarForUser(parsed.email, parsed.name);
           return parsed;
         }
       }
@@ -214,14 +210,15 @@ export default function App() {
       if (cloudUsers && cloudUsers.length > 0) {
         localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(cloudUsers));
         if (currentUser) {
-          const currentUsername = currentUser.email.toLowerCase();
-          const me = cloudUsers.find(u => u.email.toLowerCase() === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
+          const currentUsername = currentUser.email.toLowerCase().replace(/^@/, '');
+          const me = cloudUsers.find(u => (u.email || '').toLowerCase().replace(/^@/, '') === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
           if (me) {
+            const avatar = getAvatarForUser(me.email, me.name);
             setCurrentUser({
               email: me.email,
               name: me.name,
               role: me.role,
-              avatarUrl: me.avatarUrl
+              avatarUrl: avatar
             });
           }
         }
@@ -233,14 +230,15 @@ export default function App() {
       if (updatedCloudUsers && updatedCloudUsers.length > 0) {
         localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(updatedCloudUsers));
         if (currentUser) {
-          const currentUsername = currentUser.email.toLowerCase();
-          const me = updatedCloudUsers.find(u => u.email.toLowerCase() === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
+          const currentUsername = currentUser.email.toLowerCase().replace(/^@/, '');
+          const me = updatedCloudUsers.find(u => (u.email || '').toLowerCase().replace(/^@/, '') === currentUsername || (currentUsername === 'superadmin' && u.id === 'master-superadmin'));
           if (me) {
+            const avatar = getAvatarForUser(me.email, me.name);
             setCurrentUser({
               email: me.email,
               name: me.name,
               role: me.role,
-              avatarUrl: me.avatarUrl
+              avatarUrl: avatar
             });
           }
         }
@@ -249,11 +247,13 @@ export default function App() {
 
     // 3. Cross-Tab Local Storage Listener
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === DB_KEYS.AUTH_USER || e.key === 'EARSIP_USER_LIST' || e.key === 'EARSIP_ADMIN_ACCOUNT') {
+      if (e.key === DB_KEYS.AUTH_USER || e.key === 'EARSIP_USER_LIST' || e.key === 'EARSIP_ADMIN_ACCOUNT' || e.key === 'EARSIP_AVATARS_MAP') {
         const savedAuth = localStorage.getItem(DB_KEYS.AUTH_USER);
         if (savedAuth) {
           try {
-            setCurrentUser(JSON.parse(savedAuth));
+            const parsed = JSON.parse(savedAuth);
+            parsed.avatarUrl = getAvatarForUser(parsed.email, parsed.name);
+            setCurrentUser(parsed);
           } catch {}
         }
       }

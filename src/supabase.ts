@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { ArsipItem, MasterSiswaItem, MasterGuruItem } from './data/mockDatabase';
+import { ArsipItem, MasterSiswaItem, MasterGuruItem, getAvatarForUser } from './data/mockDatabase';
 
 export interface SupabaseConfig {
   url: string;
@@ -431,16 +431,24 @@ export async function fetchUsersFromSupabase(): Promise<any[] | null> {
       ];
     }
 
-    return data.map((d: any) => ({
-      id: d.id || `usr-${d.email}`,
-      name: d.nama || d.name || 'Pengguna',
-      email: d.email || '',
-      role: d.role || 'Administrator Arsip',
-      status: d.status || 'Aktif',
-      password: d.password || 'superadmin123',
-      avatarUrl: d.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(d.nama || d.name || 'User')}&background=2563eb&color=fff&size=100`,
-      isSuperAdmin: (d.role || '').toLowerCase().includes('super') || (d.email || '').toLowerCase() === 'superadmin'
-    }));
+    return data.map((d: any) => {
+      const email = d.email || '';
+      const name = d.nama || d.name || 'Pengguna';
+      const avatarUrl = (d.avatar_url && !d.avatar_url.includes('ui-avatars.com')) 
+        ? d.avatar_url 
+        : getAvatarForUser(email, name);
+
+      return {
+        id: d.id || `usr-${email}`,
+        name,
+        email,
+        role: d.role || 'Administrator Arsip',
+        status: d.status || 'Aktif',
+        password: d.password || 'superadmin123',
+        avatarUrl,
+        isSuperAdmin: (d.role || '').toLowerCase().includes('super') || email.toLowerCase() === 'superadmin'
+      };
+    });
   } catch {
     return null;
   }

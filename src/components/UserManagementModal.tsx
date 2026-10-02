@@ -20,7 +20,7 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { addAuditLog, DB_KEYS } from '../data/mockDatabase';
+import { addAuditLog, DB_KEYS, getAvatarForUser, saveAvatarForUser } from '../data/mockDatabase';
 import { syncAllUsersToSupabase, saveSingleUserToSupabase, deleteUserFromSupabase, fetchUsersFromSupabase } from '../supabase';
 
 export interface SystemUser {
@@ -60,14 +60,19 @@ export function getStoredUserList(): SystemUser[] {
     }
 
     // Pastikan akun utama Solikhin Mbolo selalu ada di list
+    let fullList = parsed;
     const hasMaster = parsed.some(u => u.id === 'master-superadmin' || (u.email || '').toLowerCase() === 'superadmin');
     if (!hasMaster) {
-      const merged = [INITIAL_SYSTEM_USERS[0], ...parsed];
-      localStorage.setItem('EARSIP_USER_LIST', JSON.stringify(merged));
-      return merged;
+      fullList = [INITIAL_SYSTEM_USERS[0], ...parsed];
     }
 
-    return parsed;
+    // Enrich avatars with persistent storage
+    return fullList.map(u => ({
+      ...u,
+      avatarUrl: (u.avatarUrl && !u.avatarUrl.includes('ui-avatars.com')) 
+        ? u.avatarUrl 
+        : getAvatarForUser(u.email, u.name)
+    }));
   } catch {
     return INITIAL_SYSTEM_USERS;
   }
@@ -354,6 +359,14 @@ export default function UserManagementModal({
     }
 
     const oldEmail = editingUser ? editingUser.email : cleanEmail;
+
+    if (formAvatar) {
+      saveAvatarForUser(cleanEmail, formAvatar);
+      saveAvatarForUser(oldEmail, formAvatar);
+      if (editingUser?.id === 'master-superadmin' || cleanEmail === 'superadmin') {
+        saveAvatarForUser('superadmin', formAvatar);
+      }
+    }
 
     setUsers(updatedList);
     saveStoredUserList(updatedList);

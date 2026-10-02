@@ -948,6 +948,66 @@ export function saveStoredSyncConfig(cfg: GoogleSyncConfig) {
   }
 }
 
+// =====================================================================
+// PERSISTENT AVATAR / PROFILE PICTURE STORAGE
+// =====================================================================
+
+export function getAvatarForUser(emailOrUsername: string, name?: string): string {
+  try {
+    const cleanKey = (emailOrUsername || '').toLowerCase().trim().replace(/^@/, '');
+    
+    // 1. Dedicated avatar map
+    const avatarsMapRaw = localStorage.getItem('EARSIP_AVATARS_MAP');
+    if (avatarsMapRaw) {
+      const avatarsMap = JSON.parse(avatarsMapRaw);
+      if (avatarsMap[cleanKey] && !avatarsMap[cleanKey].includes('ui-avatars.com')) {
+        return avatarsMap[cleanKey];
+      }
+    }
+
+    // 2. Admin account storage
+    const adminAccRaw = localStorage.getItem('EARSIP_ADMIN_ACCOUNT');
+    if (adminAccRaw) {
+      const parsed = JSON.parse(adminAccRaw);
+      if (parsed?.avatarUrl && !parsed.avatarUrl.includes('ui-avatars.com') && (cleanKey === 'superadmin' || cleanKey === (parsed.email || '').toLowerCase().replace(/^@/, ''))) {
+        return parsed.avatarUrl;
+      }
+    }
+
+    // 3. User list storage
+    const userListRaw = localStorage.getItem('EARSIP_USER_LIST');
+    if (userListRaw) {
+      const parsedList = JSON.parse(userListRaw);
+      if (Array.isArray(parsedList)) {
+        const found = parsedList.find(u => (u.email || '').toLowerCase().replace(/^@/, '') === cleanKey);
+        if (found?.avatarUrl && !found.avatarUrl.includes('ui-avatars.com')) {
+          return found.avatarUrl;
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback default avatar generator
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || emailOrUsername || 'User')}&background=2563eb&color=fff&size=100`;
+}
+
+export function saveAvatarForUser(emailOrUsername: string, avatarDataUrl: string): void {
+  if (!avatarDataUrl) return;
+  try {
+    const cleanKey = (emailOrUsername || '').toLowerCase().trim().replace(/^@/, '');
+    const raw = localStorage.getItem('EARSIP_AVATARS_MAP');
+    const map = raw ? JSON.parse(raw) : {};
+    map[cleanKey] = avatarDataUrl;
+    if (cleanKey === 'superadmin' || cleanKey === 'master-superadmin') {
+      map['superadmin'] = avatarDataUrl;
+      map['master-superadmin'] = avatarDataUrl;
+    }
+    localStorage.setItem('EARSIP_AVATARS_MAP', JSON.stringify(map));
+  } catch (err) {
+    console.warn('saveAvatarForUser notice:', err);
+  }
+}
+
 export const GOOGLE_APPS_SCRIPT_ROBUST_CODE = `/**
  * SISTEM INTEGRASI GOOGLE DRIVE & GOOGLE SPREADSHEET
  * E-ARSIP DIGITAL SMP AL-HIKAM
