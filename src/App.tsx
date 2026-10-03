@@ -138,6 +138,9 @@ export default function App() {
   // Session expired notice message
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string>('');
 
+  // Successful login notice message
+  const [loginNotice, setLoginNotice] = useState<string>('');
+
   // Auth state: Default MUST LOGIN FIRST (null) unless there is a fresh session verified within 30 min
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string; role: string; avatarUrl?: string } | null>(() => {
     try {
@@ -1013,6 +1016,12 @@ function doGet(e) {
     localStorage.setItem('EARSIP_LAST_ACTIVE_TIME', now.toString());
     setSessionExpiredNotice('');
     setActivePage('dashboard');
+
+    // Show smooth login notice for 4.5 seconds
+    setLoginNotice(`Selamat saudara ${user.name}, Anda berhasil login sebagai ${user.role}`);
+    setTimeout(() => {
+      setLoginNotice('');
+    }, 4500);
   };
 
   const handleLogout = () => {
@@ -1357,6 +1366,16 @@ function doGet(e) {
             </div>
           </div>
 
+          {/* Centered Login Notification on Desktop */}
+          <div className="flex-1 flex justify-center px-4">
+            {loginNotice && (
+              <div className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-blue-500/15 border border-cyan-400/40 text-cyan-300 text-xs font-bold animate-fadeIn shadow-lg shadow-cyan-500/5 max-w-md truncate backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />
+                <span>{loginNotice}</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-4 sm:gap-5">
             <button
               onClick={() => setShowLogoutModal(true)}
@@ -1404,6 +1423,14 @@ function doGet(e) {
           {/* Subtle Ambient Gradient Light Reflections (No stiff solid color) */}
           <div className="absolute -top-10 left-1/4 w-48 h-28 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -bottom-8 right-12 w-40 h-20 bg-cyan-400/15 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Centered Login Notification on Mobile */}
+          {loginNotice && (
+            <div className="absolute top-[max(1.25rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-50 bg-[#080E21]/95 border border-cyan-400/60 text-cyan-300 text-[10px] sm:text-xs font-bold px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-1.5 animate-fadeIn max-w-[90vw] text-center backdrop-blur-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping flex-shrink-0" />
+              <span className="truncate">{loginNotice}</span>
+            </div>
+          )}
 
           <div className="relative z-10 flex items-center justify-between">
             {activePage === 'dashboard' ? (
